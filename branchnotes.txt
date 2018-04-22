@@ -1,0 +1,5 @@
+sis_4_25
+
+single instance snapshot 4/25 
+
+using gemini 2.5 pro with aider this time.  starting over.  the singleInstanceSnapshot branch si from over a month ago using claude. 

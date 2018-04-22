@@ -1,0 +1,51 @@
+[workspace]
+resolver = "2"
+members = [
+    "crates/meilisearch",
+    "crates/meilitool",
+    "crates/meilisearch-types",
+    "crates/meilisearch-auth",
+    "crates/meili-snap",
+    "crates/index-scheduler",
+    "crates/dump",
+    "crates/file-store",
+    "crates/permissive-json-pointer",
+    "crates/milli",
+    "crates/filter-parser",
+    "crates/flatten-serde-json",
+    "crates/json-depth-checker",
+    "crates/benchmarks",
+    "crates/fuzzers",
+    "crates/tracing-trace",
+    "crates/xtask",
+    "crates/build-info",
+]
+
+[workspace.package]
+version = "1.14.0"
+authors = [
+    "Quentin de Quelen <quentin@dequelen.me>",
+    "Clément Renault <clement@meilisearch.com>",
+]
+description = "Meilisearch HTTP server"
+homepage = "https://meilisearch.com"
+readme = "README.md"
+edition = "2021"
+license = "MIT"
+
+[profile.release]
+codegen-units = 1
+
+# We now compile heed without the NDEBUG define for better performance.
+# However, we still enable debug assertions for a better detection of
+# disk corruption on the cloud or in OSS.
+[profile.release.package.heed]
+debug-assertions = true
+
+[profile.dev.package.flate2]
+opt-level = 3
+
+[profile.dev.package.grenad]
+opt-level = 3
+[profile.dev.package.roaring]
+opt-level = 3
