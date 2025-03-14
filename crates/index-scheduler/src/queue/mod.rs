@@ -269,7 +269,7 @@ impl Queue {
 
         // Validate task-specific requirements
         match kind {
-            KindWithContent::SingleIndexSnapshotCreation { index_uid, .. } => {
+            KindWithContent::SingleIndexSnapshotCreation { .. } => {
                 // We can't validate index existence here since Queue doesn't have access to index_mapper
                 // This validation will happen during task processing
             },

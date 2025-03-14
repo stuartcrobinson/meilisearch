@@ -336,7 +336,7 @@ impl IndexScheduler {
                 
                 Ok((vec![task], None))
             },
-            Batch::SingleIndexSnapshotImport { index_uid, mut task } => {
+            Batch::SingleIndexSnapshotImport { index_uid: _, mut task } => {
                 // Process single index snapshot import
                 // Implementation for single index snapshot import
                 // This is a placeholder - actual implementation would import a snapshot for just this index
