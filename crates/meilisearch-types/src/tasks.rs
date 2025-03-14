@@ -976,7 +976,7 @@ mod tests {
                         index_uid: "products".to_string(),
                         snapshot_path: "/path/to/snapshot.tar.gz".to_string(),
                     },
-                    json!({"indexUid": "products", "snapshotPath": "/path/to/snapshot.tar.gz"}),
+                    json!({"type": "SingleIndexSnapshotCreation", "indexUid": "products", "snapshotPath": "/path/to/snapshot.tar.gz"}),
                 ),
                 // Import task without document count (still in progress)
                 (
@@ -985,7 +985,7 @@ mod tests {
                         index_uid: "products".to_string(),
                         imported_documents: None,
                     },
-                    json!({"sourcePath": "/path/to/source.tar.gz", "indexUid": "products", "importedDocuments": null}),
+                    json!({"type": "SingleIndexSnapshotImport", "sourcePath": "/path/to/source.tar.gz", "indexUid": "products", "importedDocuments": null}),
                 ),
                 // Import task with document count (completed)
                 (
@@ -994,7 +994,7 @@ mod tests {
                         index_uid: "products".to_string(),
                         imported_documents: Some(1000),
                     },
-                    json!({"sourcePath": "/path/to/source.tar.gz", "indexUid": "products", "importedDocuments": 1000}),
+                    json!({"type": "SingleIndexSnapshotImport", "sourcePath": "/path/to/source.tar.gz", "indexUid": "products", "importedDocuments": 1000}),
                 ),
             ];
 
