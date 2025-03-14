@@ -209,6 +209,7 @@ impl Error {
             | Error::Internal(_)
             | Error::SnapshotVersionFileNotFound
             | Error::SnapshotMissingIndexData
+            | Error::InvalidSnapshotFormat(_)
             | Error::Dump(_)
             | Error::Heed(_)
             | Error::Milli { .. }
@@ -271,6 +272,7 @@ impl ErrorCode for Error {
             Error::BatchNotFound(_) => Code::BatchNotFound,
             Error::TaskDeletionWithEmptyQuery => Code::MissingTaskFilters,
             Error::TaskCancelationWithEmptyQuery => Code::MissingTaskFilters,
+            Error::InvalidSnapshotFormat(_) => Code::BadRequest,
             // TODO: not sure of the Code to use
             Error::NoSpaceLeftInTaskQueue => Code::NoSpaceLeftOnDevice,
             Error::Dump(e) => e.error_code(),

@@ -270,11 +270,8 @@ impl Queue {
         // Validate task-specific requirements
         match kind {
             KindWithContent::SingleIndexSnapshotCreation { index_uid, .. } => {
-                // Validate that the index exists
-                let rtxn = wtxn.read_txn()?;
-                if !self.index_mapper.exists(&rtxn, index_uid)? {
-                    return Err(Error::IndexNotFound(index_uid.clone()));
-                }
+                // We can't validate index existence here since Queue doesn't have access to index_mapper
+                // This validation will happen during task processing
             },
             KindWithContent::SingleIndexSnapshotImport { source_path, .. } => {
                 // Validate the source file exists and has the correct extension
