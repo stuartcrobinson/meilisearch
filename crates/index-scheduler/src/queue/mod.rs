@@ -267,6 +267,34 @@ impl Queue {
             }
         }
 
+        // Validate task-specific requirements
+        match kind {
+            KindWithContent::SingleIndexSnapshotCreation { index_uid, .. } => {
+                // Validate that the index exists
+                let rtxn = wtxn.read_txn()?;
+                if !self.index_mapper.exists(&rtxn, index_uid)? {
+                    return Err(Error::IndexNotFound(index_uid.clone()));
+                }
+            },
+            KindWithContent::SingleIndexSnapshotImport { source_path, .. } => {
+                // Validate the source file exists and has the correct extension
+                use std::path::Path;
+                
+                let path = Path::new(source_path);
+                if !path.exists() {
+                    return Err(Error::IoError(std::io::Error::new(
+                        std::io::ErrorKind::NotFound,
+                        format!("Snapshot file not found: {}", source_path)
+                    )));
+                }
+                
+                if !source_path.ends_with(".snapshot") {
+                    return Err(Error::InvalidSnapshotFormat(source_path.clone()));
+                }
+            },
+            _ => {}
+        }
+
         let mut task = Task {
             uid: task_id.unwrap_or(next_task_id),
             // The batch is defined once we starts processing the task

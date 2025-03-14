@@ -24,6 +24,14 @@ pub(crate) enum Batch {
     },
     TaskDeletions(Vec<Task>),
     SnapshotCreation(Vec<Task>),
+    SingleIndexSnapshot {
+        index_uid: String,
+        task: Task,
+    },
+    SingleIndexSnapshotImport {
+        index_uid: String,
+        task: Task,
+    },
     Dump(Task),
     IndexOperation {
         op: IndexOperation,
@@ -103,7 +111,9 @@ impl Batch {
             Batch::TaskCancelation { task, .. }
             | Batch::Dump(task)
             | Batch::IndexCreation { task, .. }
-            | Batch::IndexUpdate { task, .. } => {
+            | Batch::IndexUpdate { task, .. }
+            | Batch::SingleIndexSnapshot { task, .. }
+            | Batch::SingleIndexSnapshotImport { task, .. } => {
                 RoaringBitmap::from_sorted_iter(std::iter::once(task.uid)).unwrap()
             }
             Batch::SnapshotCreation(tasks)
@@ -147,7 +157,9 @@ impl Batch {
             IndexOperation { op, .. } => Some(op.index_uid()),
             IndexCreation { index_uid, .. }
             | IndexUpdate { index_uid, .. }
-            | IndexDeletion { index_uid, .. } => Some(index_uid),
+            | IndexDeletion { index_uid, .. }
+            | SingleIndexSnapshot { index_uid, .. }
+            | SingleIndexSnapshotImport { index_uid, .. } => Some(index_uid),
         }
     }
 }
@@ -161,6 +173,8 @@ impl fmt::Display for Batch {
             Batch::TaskCancelation { .. } => f.write_str("TaskCancelation")?,
             Batch::TaskDeletions(_) => f.write_str("TaskDeletion")?,
             Batch::SnapshotCreation(_) => f.write_str("SnapshotCreation")?,
+            Batch::SingleIndexSnapshot { .. } => f.write_str("SingleIndexSnapshot")?,
+            Batch::SingleIndexSnapshotImport { .. } => f.write_str("SingleIndexSnapshotImport")?,
             Batch::Dump(_) => f.write_str("Dump")?,
             Batch::IndexOperation { op, .. } => write!(f, "{op}")?,
             Batch::IndexCreation { .. } => f.write_str("IndexCreation")?,
@@ -426,8 +440,10 @@ impl IndexScheduler {
     /// 1. We get the *last* task to cancel.
     /// 2. We get the *next* task to delete.
     /// 3. We get the *next* snapshot to process.
-    /// 4. We get the *next* dump to process.
-    /// 5. We get the *next* tasks to process for a specific index.
+    /// 4. We get the *next* single index snapshot to process.
+    /// 5. We get the *next* single index snapshot import to process.
+    /// 6. We get the *next* dump to process.
+    /// 7. We get the *next* tasks to process for a specific index.
     #[tracing::instrument(level = "trace", skip(self, rtxn), target = "indexing::scheduler")]
     pub(crate) fn create_next_batch(
         &self,
@@ -481,7 +497,33 @@ impl IndexScheduler {
             return Ok(Some((Batch::SnapshotCreation(tasks), current_batch)));
         }
 
-        // 4. we batch the dumps.
+        // 4. we batch the single index snapshots.
+        let to_single_snapshot = self.queue.tasks.get_kind(rtxn, Kind::SingleIndexSnapshotCreation)? & enqueued;
+        if let Some(task_id) = to_single_snapshot.min() {
+            let mut task =
+                self.queue.tasks.get_task(rtxn, task_id)?.ok_or(Error::CorruptedTaskQueue)?;
+            current_batch.processing(Some(&mut task));
+            if let KindWithContent::SingleIndexSnapshotCreation { index_uid, .. } = &task.kind {
+                return Ok(Some((Batch::SingleIndexSnapshot { index_uid: index_uid.clone(), task }, current_batch)));
+            } else {
+                unreachable!("Task kind should be SingleIndexSnapshotCreation");
+            }
+        }
+
+        // 5. we batch the single index snapshot imports.
+        let to_single_snapshot_import = self.queue.tasks.get_kind(rtxn, Kind::SingleIndexSnapshotImport)? & enqueued;
+        if let Some(task_id) = to_single_snapshot_import.min() {
+            let mut task =
+                self.queue.tasks.get_task(rtxn, task_id)?.ok_or(Error::CorruptedTaskQueue)?;
+            current_batch.processing(Some(&mut task));
+            if let KindWithContent::SingleIndexSnapshotImport { index_uid, .. } = &task.kind {
+                return Ok(Some((Batch::SingleIndexSnapshotImport { index_uid: index_uid.clone(), task }, current_batch)));
+            } else {
+                unreachable!("Task kind should be SingleIndexSnapshotImport");
+            }
+        }
+
+        // 6. we batch the dumps.
         let to_dump = self.queue.tasks.get_kind(rtxn, Kind::DumpCreation)? & enqueued;
         if let Some(to_dump) = to_dump.min() {
             let mut task =
