@@ -1,13 +1,13 @@
 use super::*;
 use tempfile::tempdir;
-use meilisearch_types::tasks::{KindWithContent, Status, TaskId};
+use meilisearch_types::tasks::{KindWithContent, Status};
 use crate::IndexScheduler;
 
 #[test]
 fn test_single_index_snapshot_validation() {
     // Setup test environment
-    let dir = tempfile::tempdir().unwrap();
-    let (mut scheduler, _handle) = IndexScheduler::test(true, vec![]);
+    let _dir = tempfile::tempdir().unwrap();
+    let (scheduler, _handle) = IndexScheduler::test(true, vec![]);
     let test_index = "test-index";
     
     // Create an index for testing
