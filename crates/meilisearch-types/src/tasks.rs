@@ -727,16 +727,21 @@ pub enum Details {
     },
     SingleIndexSnapshotCreation {
         /// The unique identifier of the index being snapshotted
+        #[serde(rename = "indexUid")]
         index_uid: String,
         /// The path where the snapshot was stored 
+        #[serde(rename = "snapshotPath")]
         snapshot_path: String,
     },
     SingleIndexSnapshotImport {
         /// The path of the snapshot file to import
+        #[serde(rename = "sourcePath")]
         source_path: String,
         /// The unique identifier for the index to create from the snapshot
+        #[serde(rename = "indexUid")]
         index_uid: String,
         /// Number of documents that were successfully imported (populated when task completes)
+        #[serde(rename = "importedDocuments")]
         imported_documents: Option<u64>,
     },
 }
