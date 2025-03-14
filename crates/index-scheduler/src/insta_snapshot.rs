@@ -294,6 +294,12 @@ fn snapshot_details(d: &Details) -> String {
         Details::UpgradeDatabase { from, to } => {
             format!("{{ from: {from:?}, to: {to:?} }}")
         }
+        Details::SingleIndexSnapshotCreation { snapshot_path } => {
+            format!("{{ snapshot_path: {snapshot_path:?} }}")
+        }
+        Details::SingleIndexSnapshotImport { source_path, imported_documents } => {
+            format!("{{ source_path: {source_path:?}, imported_documents: {imported_documents:?} }}")
+        }
     }
 }
 

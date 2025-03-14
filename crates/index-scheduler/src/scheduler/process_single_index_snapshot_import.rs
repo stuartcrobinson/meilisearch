@@ -45,7 +45,7 @@ impl IndexScheduler {
         let temp_dir = tempfile::tempdir()?;
 
         // Determine the full path to the snapshot file
-        let snapshot_path = if Path::new(source_path).is_absolute() {
+        let snapshot_path = if Path::new(&source_path).is_absolute() {
             PathBuf::from(source_path)
         } else {
             // If relative, assume it's relative to the snapshots directory
@@ -122,7 +122,7 @@ impl IndexScheduler {
         progress.update_progress(SingleIndexSnapshotImportProgress::UpdatingIndexMappings);
         
         // Add the index to the index mapping
-        self.index_mapper.index_mapping.put(&mut wtxn, target_index_uid, &index_uuid)?;
+        self.index_mapper.index_mapping.put(&mut wtxn, &target_index_uid, &index_uuid)?;
         
         // Commit the transaction
         wtxn.commit()?;
@@ -133,7 +133,7 @@ impl IndexScheduler {
         
         // Open a read transaction to verify the index was properly imported
         let rtxn = self.env.read_txn()?;
-        let index = self.index_mapper.index(&rtxn, target_index_uid)?;
+        let index = self.index_mapper.index(&rtxn, &target_index_uid)?;
         
         // Get document count to include in the task result
         let document_count = index.number_of_documents(&rtxn)

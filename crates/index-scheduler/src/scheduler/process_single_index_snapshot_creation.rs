@@ -86,7 +86,7 @@ impl IndexScheduler {
         progress.update_progress(SingleIndexSnapshotCreationProgress::CreatingTarball);
         
         // Determine the final snapshot path
-        let final_snapshot_path = if Path::new(snapshot_path).is_absolute() {
+        let final_snapshot_path = if Path::new(&snapshot_path).is_absolute() {
             PathBuf::from(snapshot_path)
         } else {
             self.scheduler.snapshots_path.join(snapshot_path)

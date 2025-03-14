@@ -596,6 +596,17 @@ impl crate::IndexScheduler {
                     Details::UpgradeDatabase { from: _, to: _ } => {
                         assert_eq!(kind.as_kind(), Kind::UpgradeDatabase);
                     }
+                    Details::SingleIndexSnapshotCreation { snapshot_path: _ } => {
+                        assert_eq!(kind.as_kind(), Kind::SingleIndexSnapshotCreation);
+                    }
+                    Details::SingleIndexSnapshotImport { source_path: _, imported_documents } => {
+                        assert_eq!(kind.as_kind(), Kind::SingleIndexSnapshotImport);
+                        if imported_documents.is_some() {
+                            assert_eq!(status, Status::Succeeded);
+                        } else {
+                            assert_ne!(status, Status::Succeeded);
+                        }
+                    }
                 }
             }
 

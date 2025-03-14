@@ -204,6 +204,9 @@ impl Error {
             | Error::TaskDeletionWithEmptyQuery
             | Error::TaskCancelationWithEmptyQuery
             | Error::AbortedTask
+            | Error::Internal(_)
+            | Error::SnapshotVersionFileNotFound
+            | Error::SnapshotMissingIndexData
             | Error::Dump(_)
             | Error::Heed(_)
             | Error::Milli { .. }
@@ -212,6 +215,7 @@ impl Error {
             | Error::IoError(_)
             | Error::Persist(_)
             | Error::FeatureNotEnabled(_)
+            | Error::SerdeJson(_)
             | Error::Anyhow(_) => true,
             Error::CreateBatch(_)
             | Error::CorruptedTaskQueue
@@ -276,6 +280,10 @@ impl ErrorCode for Error {
             Error::IoError(e) => e.error_code(),
             Error::Persist(e) => e.error_code(),
             Error::FeatureNotEnabled(_) => Code::FeatureNotEnabled,
+            Error::SerdeJson(_) => Code::Internal,
+            Error::Internal(_) => Code::Internal,
+            Error::SnapshotVersionFileNotFound => Code::Internal,
+            Error::SnapshotMissingIndexData => Code::Internal,
 
             // Irrecoverable errors
             Error::Anyhow(_) => Code::Internal,

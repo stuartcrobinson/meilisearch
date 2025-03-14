@@ -524,6 +524,10 @@ impl IndexMapper {
         Ok(self.index_mapping.get(rtxn, name)?.is_some())
     }
 
+    pub fn index_directory(&self) -> &PathBuf {
+        &self.base_path
+    }
+
     pub fn indexer_config(&self) -> &IndexerConfig {
         &self.indexer_config
     }
