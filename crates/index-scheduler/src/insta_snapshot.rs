@@ -294,11 +294,11 @@ fn snapshot_details(d: &Details) -> String {
         Details::UpgradeDatabase { from, to } => {
             format!("{{ from: {from:?}, to: {to:?} }}")
         }
-        Details::SingleIndexSnapshotCreation { snapshot_path } => {
-            format!("{{ snapshot_path: {snapshot_path:?} }}")
+        Details::SingleIndexSnapshotCreation { snapshot_path, index_uid } => {
+            format!("{{ snapshot_path: {snapshot_path:?}, index_uid: {index_uid:?} }}")
         }
-        Details::SingleIndexSnapshotImport { source_path, imported_documents } => {
-            format!("{{ source_path: {source_path:?}, imported_documents: {imported_documents:?} }}")
+        Details::SingleIndexSnapshotImport { source_path, imported_documents, index_uid } => {
+            format!("{{ source_path: {source_path:?}, imported_documents: {imported_documents:?}, index_uid: {index_uid:?} }}")
         }
     }
 }
