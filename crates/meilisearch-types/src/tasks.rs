@@ -926,7 +926,7 @@ mod tests {
             let json = serde_json::to_string(&creation).unwrap();
             let deserialized: KindWithContent = serde_json::from_str(&json).unwrap();
             match deserialized {
-                KindWithContent::SingleIndexSnapshotCreation { index_uid, snapshot_path } => {
+                KindWithContent::SingleIndexSnapshotCreation { index_uid, .. } => {
                     assert_eq!(index_uid, "test-index");
                 }
                 _ => panic!("Deserialized to wrong task variant")
