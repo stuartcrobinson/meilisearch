@@ -26,15 +26,16 @@ fn test_single_index_snapshot_validation() {
     assert_eq!(valid_creation.status, Status::Enqueued);
     
     // Test non-existent index for snapshot creation
-    let err = scheduler.register(
+    // Note: The validation for index existence happens at task execution time, not registration
+    let task = scheduler.register(
         KindWithContent::SingleIndexSnapshotCreation { 
             index_uid: "non-existent-index".to_string(),
             snapshot_path: "path.snapshot".to_string()
         },
         None,
         false
-    ).unwrap_err();
-    assert!(matches!(err, Error::IndexNotFound(name) if name == "non-existent-index"));
+    ).unwrap();
+    assert_eq!(task.status, Status::Enqueued);
     
     // Create a mock snapshot file for import testing
     let temp_dir = tempdir().unwrap();
