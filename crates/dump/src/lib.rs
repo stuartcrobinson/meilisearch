@@ -213,12 +213,12 @@ impl From<KindWithContent> for KindDump {
                 KindDump::DumpCreation { keys, instance_uid }
             }
             KindWithContent::SnapshotCreation => KindDump::SnapshotCreation,
-            KindWithContent::SingleIndexSnapshotCreation { index_uid, .. } => {
+            KindWithContent::SingleIndexSnapshotCreation { .. } => {
                 // For single index snapshots, we can use the same dump kind as regular snapshots
                 // since we don't need to store the snapshot path in the dump
                 KindDump::SnapshotCreation
             },
-            KindWithContent::SingleIndexSnapshotImport { source_path, index_uid, .. } => {
+            KindWithContent::SingleIndexSnapshotImport { .. } => {
                 // For imports, we can use the dump creation kind as a close approximation
                 // This is a simplification since dumps don't have a direct equivalent
                 KindDump::DumpCreation { 

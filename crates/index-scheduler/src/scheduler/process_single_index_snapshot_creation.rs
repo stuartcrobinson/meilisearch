@@ -11,6 +11,7 @@ use crate::processing::SingleIndexSnapshotCreationProgress;
 use crate::{Error, IndexScheduler, Result};
 
 impl IndexScheduler {
+    #[allow(dead_code)]
     pub(super) fn process_single_index_snapshot_creation(
         &self,
         progress: Progress,

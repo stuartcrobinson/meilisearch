@@ -524,6 +524,7 @@ impl IndexMapper {
         Ok(self.index_mapping.get(rtxn, name)?.is_some())
     }
 
+    #[allow(dead_code)]
     pub fn index_directory(&self) -> &PathBuf {
         &self.base_path
     }

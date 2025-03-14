@@ -10,6 +10,7 @@ use crate::processing::SingleIndexSnapshotImportProgress;
 use crate::{Error, IndexScheduler, Result};
 
 impl IndexScheduler {
+    #[allow(dead_code)]
     pub(super) fn process_single_index_snapshot_import(
         &self,
         progress: Progress,
