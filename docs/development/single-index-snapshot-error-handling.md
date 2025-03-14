@@ -91,3 +91,18 @@ By following these patterns, we maintain consistency with the existing codebase 
 ```
 
 This documentation serves as a reference for implementing the actual functionality in later steps, ensuring we follow consistent error handling patterns throughout the codebase.
+
+---------
+
+Path Resolution Pattern
+// Resolve paths consistently
+let full_path = if path.is_absolute() {
+    path.to_path_buf()
+} else {
+    self.scheduler.snapshots_path.join(path)
+};
+
+Transaction Handling Pattern
+// Read-only transactions for validation
+let rtxn = self.env.read_txn()?;
+let index_exists = self.index_mapper.exists(&rtxn, index_uid)?;

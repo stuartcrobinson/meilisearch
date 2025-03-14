@@ -55,6 +55,8 @@ pub enum Error {
     IndexNotFound(String),
     #[error("Index `{0}` already exists.")]
     IndexAlreadyExists(String),
+    #[error("Invalid snapshot format: {0}. Snapshot files must have a .snapshot extension.")]
+    InvalidSnapshotFormat(String),
     #[error(
         "Indexes must be declared only once during a swap. `{0}` was specified several times."
     )]
