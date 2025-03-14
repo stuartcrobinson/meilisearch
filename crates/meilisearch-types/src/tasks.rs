@@ -295,8 +295,19 @@ impl KindWithContent {
             }),
             KindWithContent::DumpCreation { .. } => Some(Details::Dump { dump_uid: None }),
             KindWithContent::SnapshotCreation => None,
-            KindWithContent::SingleIndexSnapshotCreation { .. } => None, // Will implement in step 1B
-            KindWithContent::SingleIndexSnapshotImport { .. } => None, // Will implement in step 1B
+            KindWithContent::SingleIndexSnapshotCreation { index_uid } => {
+                Some(Details::SingleIndexSnapshotCreation {
+                    index_uid: index_uid.clone(),
+                    snapshot_path: None, // Will be populated when snapshot is created
+                })
+            },
+            KindWithContent::SingleIndexSnapshotImport { source_path, index_uid, .. } => {
+                Some(Details::SingleIndexSnapshotImport {
+                    source_path: source_path.clone(),
+                    index_uid: index_uid.clone(),
+                    imported_documents: None, // Will be populated when import completes
+                })
+            },
             KindWithContent::UpgradeDatabase { from } => Some(Details::UpgradeDatabase {
                 from: (from.0, from.1, from.2),
                 to: (
@@ -363,8 +374,19 @@ impl KindWithContent {
             }),
             KindWithContent::DumpCreation { .. } => Some(Details::Dump { dump_uid: None }),
             KindWithContent::SnapshotCreation => None,
-            KindWithContent::SingleIndexSnapshotCreation { .. } => None, // Will implement in step 1B
-            KindWithContent::SingleIndexSnapshotImport { .. } => None, // Will implement in step 1B
+            KindWithContent::SingleIndexSnapshotCreation { index_uid } => {
+                Some(Details::SingleIndexSnapshotCreation {
+                    index_uid: index_uid.clone(),
+                    snapshot_path: None, // This will be populated by the task processor
+                })
+            },
+            KindWithContent::SingleIndexSnapshotImport { source_path, index_uid, .. } => {
+                Some(Details::SingleIndexSnapshotImport {
+                    source_path: source_path.clone(),
+                    index_uid: index_uid.clone(),
+                    imported_documents: Some(0), // Default to 0 documents imported
+                })
+            },
             KindWithContent::UpgradeDatabase { from } => Some(Details::UpgradeDatabase {
                 from: *from,
                 to: (
@@ -413,8 +435,19 @@ impl From<&KindWithContent> for Option<Details> {
             }),
             KindWithContent::DumpCreation { .. } => Some(Details::Dump { dump_uid: None }),
             KindWithContent::SnapshotCreation => None,
-            KindWithContent::SingleIndexSnapshotCreation { .. } => None, // Will implement in step 1B
-            KindWithContent::SingleIndexSnapshotImport { .. } => None, // Will implement in step 1B
+            KindWithContent::SingleIndexSnapshotCreation { index_uid } => {
+                Some(Details::SingleIndexSnapshotCreation {
+                    index_uid: index_uid.clone(),
+                    snapshot_path: None,
+                })
+            },
+            KindWithContent::SingleIndexSnapshotImport { source_path, index_uid, .. } => {
+                Some(Details::SingleIndexSnapshotImport {
+                    source_path: source_path.clone(),
+                    index_uid: index_uid.clone(),
+                    imported_documents: None,
+                })
+            },
             KindWithContent::UpgradeDatabase { from } => Some(Details::UpgradeDatabase {
                 from: *from,
                 to: (
@@ -691,6 +724,20 @@ pub enum Details {
         from: (u32, u32, u32),
         to: (u32, u32, u32),
     },
+    SingleIndexSnapshotCreation {
+        /// The unique identifier of the index being snapshotted
+        index_uid: String,
+        /// The path where the snapshot was stored (populated when task completes)
+        snapshot_path: Option<String>,
+    },
+    SingleIndexSnapshotImport {
+        /// The path of the snapshot file to import
+        source_path: String,
+        /// The unique identifier for the index to create from the snapshot
+        index_uid: String,
+        /// Number of documents that were successfully imported (populated when task completes)
+        imported_documents: Option<u64>,
+    },
 }
 
 impl Details {
@@ -708,11 +755,15 @@ impl Details {
             Self::ClearAll { deleted_documents } => *deleted_documents = Some(0),
             Self::TaskCancelation { canceled_tasks, .. } => *canceled_tasks = Some(0),
             Self::TaskDeletion { deleted_tasks, .. } => *deleted_tasks = Some(0),
+            Self::SingleIndexSnapshotImport { imported_documents, .. } => {
+                *imported_documents = Some(0)
+            },
             Self::SettingsUpdate { .. }
             | Self::IndexInfo { .. }
             | Self::Dump { .. }
             | Self::UpgradeDatabase { .. }
-            | Self::IndexSwap { .. } => (),
+            | Self::IndexSwap { .. }
+            | Self::SingleIndexSnapshotCreation { .. } => (),
         }
 
         details
