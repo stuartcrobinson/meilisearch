@@ -6,6 +6,8 @@ mod tasks;
 mod tasks_test;
 #[cfg(test)]
 mod test;
+#[cfg(test)]
+mod test_snapshot_validation;
 
 use std::collections::BTreeMap;
 use std::fs::File as StdFile;
