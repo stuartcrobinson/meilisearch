@@ -121,8 +121,6 @@ pub enum Error {
     TaskCancelationWithEmptyQuery,
     #[error("Aborted task")]
     AbortedTask,
-    #[error("Internal error: {0}")]
-    Internal(String),
     #[error("Snapshot version file not found")]
     SnapshotVersionFileNotFound,
     #[error("Snapshot is missing index data")]
@@ -147,8 +145,6 @@ pub enum Error {
     Persist(#[from] tempfile::PersistError),
     #[error(transparent)]
     FeatureNotEnabled(#[from] FeatureNotEnabledError),
-    #[error(transparent)]
-    SerdeJson(#[from] serde_json::Error),
 
     #[error(transparent)]
     Anyhow(#[from] anyhow::Error),
@@ -206,7 +202,6 @@ impl Error {
             | Error::TaskDeletionWithEmptyQuery
             | Error::TaskCancelationWithEmptyQuery
             | Error::AbortedTask
-            | Error::Internal(_)
             | Error::SnapshotVersionFileNotFound
             | Error::SnapshotMissingIndexData
             | Error::InvalidSnapshotFormat(_)
@@ -218,7 +213,6 @@ impl Error {
             | Error::IoError(_)
             | Error::Persist(_)
             | Error::FeatureNotEnabled(_)
-            | Error::SerdeJson(_)
             | Error::Anyhow(_) => true,
             Error::CreateBatch(_)
             | Error::CorruptedTaskQueue
@@ -284,8 +278,6 @@ impl ErrorCode for Error {
             Error::IoError(e) => e.error_code(),
             Error::Persist(e) => e.error_code(),
             Error::FeatureNotEnabled(_) => Code::FeatureNotEnabled,
-            Error::SerdeJson(_) => Code::Internal,
-            Error::Internal(_) => Code::Internal,
             Error::SnapshotVersionFileNotFound => Code::Internal,
             Error::SnapshotMissingIndexData => Code::Internal,
 
