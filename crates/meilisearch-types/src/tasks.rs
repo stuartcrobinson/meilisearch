@@ -61,7 +61,7 @@ impl Task {
             | IndexCreation { index_uid, .. }
             | IndexUpdate { index_uid, .. }
             | IndexDeletion { index_uid }
-            | SingleIndexSnapshotCreation { index_uid }
+            | SingleIndexSnapshotCreation { index_uid, .. }
             | SingleIndexSnapshotImport { index_uid, .. } => Some(index_uid),
         }
     }
@@ -158,6 +158,7 @@ pub enum KindWithContent {
     SnapshotCreation,
     SingleIndexSnapshotCreation {
         index_uid: String,
+        snapshot_path: String,
     },
     SingleIndexSnapshotImport {
         index_uid: String,
@@ -295,10 +296,10 @@ impl KindWithContent {
             }),
             KindWithContent::DumpCreation { .. } => Some(Details::Dump { dump_uid: None }),
             KindWithContent::SnapshotCreation => None,
-            KindWithContent::SingleIndexSnapshotCreation { index_uid } => {
+            KindWithContent::SingleIndexSnapshotCreation { index_uid, snapshot_path } => {
                 Some(Details::SingleIndexSnapshotCreation {
                     index_uid: index_uid.clone(),
-                    snapshot_path: None, // Will be populated when snapshot is created
+                    snapshot_path: snapshot_path.clone(),
                 })
             },
             KindWithContent::SingleIndexSnapshotImport { source_path, index_uid, .. } => {
@@ -374,10 +375,10 @@ impl KindWithContent {
             }),
             KindWithContent::DumpCreation { .. } => Some(Details::Dump { dump_uid: None }),
             KindWithContent::SnapshotCreation => None,
-            KindWithContent::SingleIndexSnapshotCreation { index_uid } => {
+            KindWithContent::SingleIndexSnapshotCreation { index_uid, snapshot_path } => {
                 Some(Details::SingleIndexSnapshotCreation {
                     index_uid: index_uid.clone(),
-                    snapshot_path: None, // This will be populated by the task processor
+                    snapshot_path: snapshot_path.clone(), // Use the provided path
                 })
             },
             KindWithContent::SingleIndexSnapshotImport { source_path, index_uid, .. } => {
@@ -727,8 +728,8 @@ pub enum Details {
     SingleIndexSnapshotCreation {
         /// The unique identifier of the index being snapshotted
         index_uid: String,
-        /// The path where the snapshot was stored (populated when task completes)
-        snapshot_path: Option<String>,
+        /// The path where the snapshot was stored 
+        snapshot_path: String,
     },
     SingleIndexSnapshotImport {
         /// The path of the snapshot file to import
@@ -951,6 +952,172 @@ mod tests {
                     assert_eq!(target_index_uid, None);
                 }
                 _ => panic!("Deserialized to wrong task variant")
+            }
+        }
+    }
+
+    #[cfg(test)]
+    mod single_index_snapshot_task_details_test {
+        use super::*;
+        use serde_json::json;
+
+        #[test]
+        fn test_single_index_snapshot_details_serialization() {
+            // Define test cases with (details_instance, expected_json_value)
+            let test_cases = vec![
+                // Creation task with required snapshot path
+                (
+                    Details::SingleIndexSnapshotCreation {
+                        index_uid: "products".to_string(),
+                        snapshot_path: "/path/to/snapshot.tar.gz".to_string(),
+                    },
+                    json!({"indexUid": "products", "snapshotPath": "/path/to/snapshot.tar.gz"}),
+                ),
+                // Import task without document count (still in progress)
+                (
+                    Details::SingleIndexSnapshotImport {
+                        source_path: "/path/to/source.tar.gz".to_string(),
+                        index_uid: "products".to_string(),
+                        imported_documents: None,
+                    },
+                    json!({"sourcePath": "/path/to/source.tar.gz", "indexUid": "products", "importedDocuments": null}),
+                ),
+                // Import task with document count (completed)
+                (
+                    Details::SingleIndexSnapshotImport {
+                        source_path: "/path/to/source.tar.gz".to_string(),
+                        index_uid: "products".to_string(),
+                        imported_documents: Some(1000),
+                    },
+                    json!({"sourcePath": "/path/to/source.tar.gz", "indexUid": "products", "importedDocuments": 1000}),
+                ),
+            ];
+
+            // Test both serialization and deserialization
+            for (details, expected_json) in test_cases {
+                // Test serialization produces expected JSON
+                let json_str = serde_json::to_string(&details).unwrap();
+                assert_eq!(serde_json::from_str::<serde_json::Value>(&json_str).unwrap(), expected_json);
+                
+                // Test round-trip deserialization preserves data
+                let round_trip: Details = serde_json::from_str(&json_str).unwrap();
+                assert_eq!(serde_json::to_string(&round_trip).unwrap(), json_str);
+            }
+        }
+
+        #[test]
+        fn test_task_methods_for_new_task_types() {
+            // ---- Test KindWithContent to Details conversion methods ----
+            
+            // Setup test task instances
+            let creation_task = KindWithContent::SingleIndexSnapshotCreation { 
+                index_uid: "products".to_string(),
+                snapshot_path: "/path/to/snapshot.tar.gz".to_string(),
+            };
+            
+            let import_task = KindWithContent::SingleIndexSnapshotImport { 
+                source_path: "/path/to/source.tar.gz".to_string(),
+                index_uid: "products".to_string(),
+            };
+
+            // Test default_details() generates correct initial state
+            assert_snapshot_creation_details(
+                creation_task.default_details().unwrap(),
+                "products", 
+                "/path/to/snapshot.tar.gz"
+            );
+            
+            assert_snapshot_import_details(
+                import_task.default_details().unwrap(),
+                "/path/to/source.tar.gz",
+                "products", 
+                None
+            );
+
+            // Test default_finished_details() preserves required paths
+            assert_snapshot_creation_details(
+                creation_task.default_finished_details().unwrap(),
+                "products", 
+                "/path/to/snapshot.tar.gz"
+            );
+            
+            // Test default_finished_details() sets success markers
+            assert_snapshot_import_details(
+                import_task.default_finished_details().unwrap(),
+                "/path/to/source.tar.gz",
+                "products", 
+                Some(0) // Should initialize count to 0 for finished state
+            );
+            
+            // Test From<&KindWithContent> for Option<Details>
+            let option_details: Option<Details> = (&creation_task).into();
+            assert_snapshot_creation_details(
+                option_details.unwrap(),
+                "products", 
+                "/path/to/snapshot.tar.gz"
+            );
+        }
+        
+        #[test]
+        fn test_to_failed_for_new_details_types() {
+            // Test to_failed() produces appropriate failure state
+            
+            // For import tasks, imported_documents should be reset to 0
+            let import_details = Details::SingleIndexSnapshotImport {
+                source_path: "/path/to/source.tar.gz".to_string(),
+                index_uid: "products".to_string(),
+                imported_documents: Some(1000), // Assume partial success
+            };
+            
+            // After failure, count should be reset to 0
+            assert_snapshot_import_details(
+                import_details.to_failed(),
+                "/path/to/source.tar.gz",
+                "products", 
+                Some(0)
+            );
+            
+            // For creation tasks, snapshot_path should be preserved
+            let creation_details = Details::SingleIndexSnapshotCreation {
+                index_uid: "products".to_string(),
+                snapshot_path: "/path/to/snapshot.tar.gz".to_string(),
+            };
+            
+            // Path should remain unchanged for failed snapshot creation
+            assert_snapshot_creation_details(
+                creation_details.to_failed(),
+                "products", 
+                "/path/to/snapshot.tar.gz"
+            );
+        }
+        
+        // Helper functions for more concise assertions
+        
+        fn assert_snapshot_creation_details(
+            details: Details,
+            expected_uid: &str,
+            expected_path: &str
+        ) {
+            if let Details::SingleIndexSnapshotCreation { index_uid, snapshot_path } = details {
+                assert_eq!(index_uid, expected_uid);
+                assert_eq!(snapshot_path, expected_path);
+            } else {
+                panic!("Expected SingleIndexSnapshotCreation variant");
+            }
+        }
+        
+        fn assert_snapshot_import_details(
+            details: Details,
+            expected_src: &str,
+            expected_uid: &str,
+            expected_docs: Option<u64>
+        ) {
+            if let Details::SingleIndexSnapshotImport { source_path, index_uid, imported_documents } = details {
+                assert_eq!(source_path, expected_src);
+                assert_eq!(index_uid, expected_uid);
+                assert_eq!(imported_documents, expected_docs);
+            } else {
+                panic!("Expected SingleIndexSnapshotImport variant");
             }
         }
     }
