@@ -104,7 +104,7 @@ impl IndexScheduler {
         let index_uuid = Uuid::new_v4();
         
         // Create the index directory
-        let index_path = self.base_path.join(index_uuid.to_string());
+        let index_path = self.index_mapper.index_directory().join(index_uuid.to_string());
         fs::create_dir_all(&index_path)?;
         
         // Copy index data from snapshot
