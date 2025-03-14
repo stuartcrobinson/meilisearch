@@ -60,7 +60,9 @@ impl Task {
             | SettingsUpdate { index_uid, .. }
             | IndexCreation { index_uid, .. }
             | IndexUpdate { index_uid, .. }
-            | IndexDeletion { index_uid } => Some(index_uid),
+            | IndexDeletion { index_uid }
+            | SingleIndexSnapshotCreation { index_uid }
+            | SingleIndexSnapshotImport { index_uid, .. } => Some(index_uid),
         }
     }
 
@@ -86,6 +88,8 @@ impl Task {
             | KindWithContent::TaskDeletion { .. }
             | KindWithContent::DumpCreation { .. }
             | KindWithContent::SnapshotCreation
+            | KindWithContent::SingleIndexSnapshotCreation { .. }
+            | KindWithContent::SingleIndexSnapshotImport { .. }
             | KindWithContent::UpgradeDatabase { .. } => None,
         }
     }
@@ -152,6 +156,14 @@ pub enum KindWithContent {
         instance_uid: Option<InstanceUid>,
     },
     SnapshotCreation,
+    SingleIndexSnapshotCreation {
+        index_uid: String,
+    },
+    SingleIndexSnapshotImport {
+        index_uid: String,
+        source_path: String,
+        target_index_uid: Option<String>,
+    },
     UpgradeDatabase {
         from: (u32, u32, u32),
     },
@@ -180,6 +192,8 @@ impl KindWithContent {
             KindWithContent::TaskDeletion { .. } => Kind::TaskDeletion,
             KindWithContent::DumpCreation { .. } => Kind::DumpCreation,
             KindWithContent::SnapshotCreation => Kind::SnapshotCreation,
+            KindWithContent::SingleIndexSnapshotCreation { .. } => Kind::SingleIndexSnapshotCreation,
+            KindWithContent::SingleIndexSnapshotImport { .. } => Kind::SingleIndexSnapshotImport,
             KindWithContent::UpgradeDatabase { .. } => Kind::UpgradeDatabase,
         }
     }
@@ -201,7 +215,19 @@ impl KindWithContent {
             | SettingsUpdate { index_uid, .. }
             | IndexCreation { index_uid, .. }
             | IndexUpdate { index_uid, .. }
-            | IndexDeletion { index_uid } => vec![index_uid],
+            | IndexDeletion { index_uid }
+            | SingleIndexSnapshotCreation { index_uid } => vec![index_uid],
+            SingleIndexSnapshotImport { index_uid, target_index_uid, .. } => {
+                if let Some(target) = target_index_uid {
+                    if target != index_uid {
+                        vec![index_uid, target]
+                    } else {
+                        vec![index_uid]
+                    }
+                } else {
+                    vec![index_uid]
+                }
+            },
             IndexSwap { swaps } => {
                 let mut indexes = HashSet::<&str>::default();
                 for swap in swaps {
@@ -269,6 +295,8 @@ impl KindWithContent {
             }),
             KindWithContent::DumpCreation { .. } => Some(Details::Dump { dump_uid: None }),
             KindWithContent::SnapshotCreation => None,
+            KindWithContent::SingleIndexSnapshotCreation { .. } => None, // Will implement in step 1B
+            KindWithContent::SingleIndexSnapshotImport { .. } => None, // Will implement in step 1B
             KindWithContent::UpgradeDatabase { from } => Some(Details::UpgradeDatabase {
                 from: (from.0, from.1, from.2),
                 to: (
@@ -335,6 +363,8 @@ impl KindWithContent {
             }),
             KindWithContent::DumpCreation { .. } => Some(Details::Dump { dump_uid: None }),
             KindWithContent::SnapshotCreation => None,
+            KindWithContent::SingleIndexSnapshotCreation { .. } => None, // Will implement in step 1B
+            KindWithContent::SingleIndexSnapshotImport { .. } => None, // Will implement in step 1B
             KindWithContent::UpgradeDatabase { from } => Some(Details::UpgradeDatabase {
                 from: *from,
                 to: (
@@ -383,6 +413,8 @@ impl From<&KindWithContent> for Option<Details> {
             }),
             KindWithContent::DumpCreation { .. } => Some(Details::Dump { dump_uid: None }),
             KindWithContent::SnapshotCreation => None,
+            KindWithContent::SingleIndexSnapshotCreation { .. } => None, // Will implement in step 1B
+            KindWithContent::SingleIndexSnapshotImport { .. } => None, // Will implement in step 1B
             KindWithContent::UpgradeDatabase { from } => Some(Details::UpgradeDatabase {
                 from: *from,
                 to: (
@@ -499,6 +531,10 @@ pub enum Kind {
     TaskDeletion,
     DumpCreation,
     SnapshotCreation,
+    /// Create a snapshot of a single index
+    SingleIndexSnapshotCreation,
+    /// Import a snapshot into a single index
+    SingleIndexSnapshotImport,
     UpgradeDatabase,
 }
 
@@ -511,7 +547,9 @@ impl Kind {
             | Kind::SettingsUpdate
             | Kind::IndexCreation
             | Kind::IndexDeletion
-            | Kind::IndexUpdate => true,
+            | Kind::IndexUpdate
+            | Kind::SingleIndexSnapshotCreation
+            | Kind::SingleIndexSnapshotImport => true,
             Kind::IndexSwap
             | Kind::TaskCancelation
             | Kind::TaskDeletion
@@ -536,6 +574,8 @@ impl Display for Kind {
             Kind::TaskDeletion => write!(f, "taskDeletion"),
             Kind::DumpCreation => write!(f, "dumpCreation"),
             Kind::SnapshotCreation => write!(f, "snapshotCreation"),
+            Kind::SingleIndexSnapshotCreation => write!(f, "singleIndexSnapshotCreation"),
+            Kind::SingleIndexSnapshotImport => write!(f, "singleIndexSnapshotImport"),
             Kind::UpgradeDatabase => write!(f, "upgradeDatabase"),
         }
     }
@@ -568,6 +608,10 @@ impl FromStr for Kind {
             Ok(Kind::DumpCreation)
         } else if kind.eq_ignore_ascii_case("snapshotCreation") {
             Ok(Kind::SnapshotCreation)
+        } else if kind.eq_ignore_ascii_case("singleIndexSnapshotCreation") {
+            Ok(Kind::SingleIndexSnapshotCreation)
+        } else if kind.eq_ignore_ascii_case("singleIndexSnapshotImport") {
+            Ok(Kind::SingleIndexSnapshotImport)
         } else if kind.eq_ignore_ascii_case("upgradeDatabase") {
             Ok(Kind::UpgradeDatabase)
         } else {
@@ -730,7 +774,7 @@ pub fn serialize_duration<S: Serializer>(
 mod tests {
     use std::str::FromStr;
 
-    use super::{Details, Kind};
+    use super::{Details, Kind, KindWithContent};
     use crate::heed::types::SerdeJson;
     use crate::heed::{BytesDecode, BytesEncode};
 
@@ -754,5 +798,47 @@ mod tests {
             let k = Kind::from_str(&s).map_err(|e| format!("Could not from_str {s}: {e}")).unwrap();
             assert_eq!(kind, k, "{kind}.to_string() returned {s} which was parsed as {k}");
         }
+    }
+    
+    #[test]
+    fn test_single_index_snapshot_tasks() {
+        // Test SingleIndexSnapshotCreation
+        let kind = Kind::SingleIndexSnapshotCreation;
+        let s = kind.to_string();
+        assert_eq!(s, "singleIndexSnapshotCreation");
+        let parsed = Kind::from_str(&s).unwrap();
+        assert_eq!(parsed, kind);
+        
+        // Test SingleIndexSnapshotImport
+        let kind = Kind::SingleIndexSnapshotImport;
+        let s = kind.to_string();
+        assert_eq!(s, "singleIndexSnapshotImport");
+        let parsed = Kind::from_str(&s).unwrap();
+        assert_eq!(parsed, kind);
+        
+        // Test KindWithContent for SingleIndexSnapshotCreation
+        let kind_with_content = KindWithContent::SingleIndexSnapshotCreation { 
+            index_uid: "test-index".to_string() 
+        };
+        assert_eq!(kind_with_content.as_kind(), Kind::SingleIndexSnapshotCreation);
+        assert_eq!(kind_with_content.indexes(), vec!["test-index"]);
+        
+        // Test KindWithContent for SingleIndexSnapshotImport
+        let kind_with_content = KindWithContent::SingleIndexSnapshotImport { 
+            index_uid: "test-index".to_string(),
+            source_path: "/path/to/snapshot".to_string(),
+            target_index_uid: None
+        };
+        assert_eq!(kind_with_content.as_kind(), Kind::SingleIndexSnapshotImport);
+        assert_eq!(kind_with_content.indexes(), vec!["test-index"]);
+        
+        // Test KindWithContent for SingleIndexSnapshotImport with target_index_uid
+        let kind_with_content = KindWithContent::SingleIndexSnapshotImport { 
+            index_uid: "test-index".to_string(),
+            source_path: "/path/to/snapshot".to_string(),
+            target_index_uid: Some("new-index".to_string())
+        };
+        assert_eq!(kind_with_content.as_kind(), Kind::SingleIndexSnapshotImport);
+        assert_eq!(kind_with_content.indexes(), vec!["test-index", "new-index"]);
     }
 }
