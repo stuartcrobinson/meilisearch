@@ -141,7 +141,7 @@ fn query_tasks_simple() {
 
     let query = Query {
         statuses: Some(vec![Status::Enqueued, Status::Processing]),
-        after_started_at: Some(start_time),
+        after_started_at: Some(start_time - Duration::seconds(1)),
         before_started_at: Some(start_time + Duration::minutes(1)),
         ..Default::default()
     };
@@ -166,7 +166,7 @@ fn query_tasks_simple() {
 
     let query = Query {
         statuses: Some(vec![Status::Succeeded, Status::Processing]),
-        after_started_at: Some(start_time),
+        after_started_at: Some(start_time - Duration::seconds(1)),
         before_started_at: Some(start_time + Duration::minutes(1)),
         ..Default::default()
     };
@@ -192,7 +192,7 @@ fn query_tasks_simple() {
 
     let query = Query {
         statuses: Some(vec![Status::Enqueued, Status::Succeeded, Status::Processing]),
-        after_started_at: Some(second_start_time),
+        after_started_at: Some(second_start_time - Duration::seconds(1)),
         before_started_at: Some(second_start_time + Duration::minutes(1)),
         ..Default::default()
     };
@@ -245,7 +245,7 @@ fn query_tasks_simple() {
 
     let query = Query {
         statuses: Some(vec![Status::Failed]),
-        after_started_at: Some(second_start_time),
+        after_started_at: Some(second_start_time - Duration::seconds(1)),
         before_started_at: Some(second_start_time + Duration::minutes(1)),
         ..Default::default()
     };
@@ -283,7 +283,7 @@ fn query_tasks_simple() {
     let query = Query {
         statuses: Some(vec![Status::Failed]),
         uids: Some(vec![2]),
-        after_started_at: Some(second_start_time),
+        after_started_at: Some(second_start_time - Duration::seconds(1)),
         before_started_at: Some(second_start_time + Duration::minutes(1)),
         ..Default::default()
     };

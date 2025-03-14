@@ -47,13 +47,24 @@ pub struct IndexMap {
     generation: usize,
 }
 
-#[derive(Clone)]
 pub struct ClosingIndex {
     uuid: Uuid,
     closing_event: EnvClosingEvent,
     enable_mdb_writemap: bool,
     map_size: usize,
     generation: usize,
+}
+
+impl Clone for ClosingIndex {
+    fn clone(&self) -> Self {
+        Self {
+            uuid: self.uuid,
+            closing_event: self.closing_event.clone(),
+            enable_mdb_writemap: self.enable_mdb_writemap,
+            map_size: self.map_size,
+            generation: self.generation,
+        }
+    }
 }
 
 impl ClosingIndex {
