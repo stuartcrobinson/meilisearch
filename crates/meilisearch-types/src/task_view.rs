@@ -332,6 +332,15 @@ impl From<Details> for DetailsView {
                 upgrade_to: Some(format!("v{}.{}.{}", to.0, to.1, to.2)),
                 ..Default::default()
             },
+            Details::SingleIndexSnapshotCreation { index_uid, snapshot_path } => DetailsView {
+                original_filter: Some(Some(format!("index_uid: {}, snapshot_path: {}", index_uid, snapshot_path))),
+                ..Default::default()
+            },
+            Details::SingleIndexSnapshotImport { source_path, index_uid, imported_documents } => DetailsView {
+                original_filter: Some(Some(format!("source_path: {}, index_uid: {}", source_path, index_uid))),
+                received_documents: imported_documents,
+                ..Default::default()
+            },
         }
     }
 }

@@ -217,7 +217,7 @@ impl KindWithContent {
             | IndexCreation { index_uid, .. }
             | IndexUpdate { index_uid, .. }
             | IndexDeletion { index_uid }
-            | SingleIndexSnapshotCreation { index_uid } => vec![index_uid],
+            | SingleIndexSnapshotCreation { index_uid, .. } => vec![index_uid],
             SingleIndexSnapshotImport { index_uid, target_index_uid, .. } => {
                 if let Some(target) = target_index_uid {
                     if target != index_uid {
@@ -436,10 +436,10 @@ impl From<&KindWithContent> for Option<Details> {
             }),
             KindWithContent::DumpCreation { .. } => Some(Details::Dump { dump_uid: None }),
             KindWithContent::SnapshotCreation => None,
-            KindWithContent::SingleIndexSnapshotCreation { index_uid } => {
+            KindWithContent::SingleIndexSnapshotCreation { index_uid, snapshot_path } => {
                 Some(Details::SingleIndexSnapshotCreation {
                     index_uid: index_uid.clone(),
-                    snapshot_path: None,
+                    snapshot_path: snapshot_path.clone(),
                 })
             },
             KindWithContent::SingleIndexSnapshotImport { source_path, index_uid, .. } => {
@@ -889,7 +889,8 @@ mod tests {
             
             // Creation task affects only the specified index
             let creation = KindWithContent::SingleIndexSnapshotCreation { 
-                index_uid: "test-index".to_string() 
+                index_uid: "test-index".to_string(),
+                snapshot_path: "/path/to/snapshot.tar.gz".to_string()
             };
             assert_eq!(creation.indexes(), vec!["test-index"]);
             
@@ -911,7 +912,8 @@ mod tests {
             
             // Create test instances
             let creation = KindWithContent::SingleIndexSnapshotCreation { 
-                index_uid: "test-index".to_string() 
+                index_uid: "test-index".to_string(),
+                snapshot_path: "/path/to/snapshot.tar.gz".to_string()
             };
             
             // Import with target
@@ -924,7 +926,7 @@ mod tests {
             let json = serde_json::to_string(&creation).unwrap();
             let deserialized: KindWithContent = serde_json::from_str(&json).unwrap();
             match deserialized {
-                KindWithContent::SingleIndexSnapshotCreation { index_uid } => {
+                KindWithContent::SingleIndexSnapshotCreation { index_uid, snapshot_path } => {
                     assert_eq!(index_uid, "test-index");
                 }
                 _ => panic!("Deserialized to wrong task variant")
@@ -1018,6 +1020,7 @@ mod tests {
             let import_task = KindWithContent::SingleIndexSnapshotImport { 
                 source_path: "/path/to/source.tar.gz".to_string(),
                 index_uid: "products".to_string(),
+                target_index_uid: None
             };
 
             // Test default_details() generates correct initial state
