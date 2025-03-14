@@ -119,6 +119,12 @@ pub enum Error {
     TaskCancelationWithEmptyQuery,
     #[error("Aborted task")]
     AbortedTask,
+    #[error("Internal error: {0}")]
+    Internal(String),
+    #[error("Snapshot version file not found")]
+    SnapshotVersionFileNotFound,
+    #[error("Snapshot is missing index data")]
+    SnapshotMissingIndexData,
 
     #[error(transparent)]
     Dump(#[from] dump::Error),
@@ -139,6 +145,8 @@ pub enum Error {
     Persist(#[from] tempfile::PersistError),
     #[error(transparent)]
     FeatureNotEnabled(#[from] FeatureNotEnabledError),
+    #[error(transparent)]
+    SerdeJson(#[from] serde_json::Error),
 
     #[error(transparent)]
     Anyhow(#[from] anyhow::Error),

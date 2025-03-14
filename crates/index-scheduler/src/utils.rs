@@ -251,6 +251,8 @@ pub fn swap_index_uid_in_task(task: &mut Task, swap: (&str, &str)) {
         K::IndexDeletion { index_uid } => index_uids.push(index_uid),
         K::IndexCreation { index_uid, .. } => index_uids.push(index_uid),
         K::IndexUpdate { index_uid, .. } => index_uids.push(index_uid),
+        K::SingleIndexSnapshotCreation { index_uid, .. } => index_uids.push(index_uid),
+        K::SingleIndexSnapshotImport { index_uid, .. } => index_uids.push(index_uid),
         K::IndexSwap { swaps } => {
             for IndexSwap { indexes: (lhs, rhs) } in swaps.iter_mut() {
                 if lhs == swap.0 || lhs == swap.1 {

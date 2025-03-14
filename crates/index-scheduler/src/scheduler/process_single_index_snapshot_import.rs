@@ -1,8 +1,6 @@
 use std::fs;
 use std::path::{Path, PathBuf};
 
-use meilisearch_types::heed::types::Str;
-use meilisearch_types::heed::{Database, RoTxn};
 use meilisearch_types::milli::progress::Progress;
 use meilisearch_types::tasks::{Status, Task};
 use meilisearch_types::{compression, VERSION_FILE_NAME};
@@ -19,9 +17,21 @@ impl IndexScheduler {
     ) -> Result<Vec<Task>> {
         // We expect exactly one task for single index snapshot import
         let task = &tasks[0];
-        let source_path = task.source_path().unwrap();
         let index_uid = task.index_uid().unwrap();
-        let target_index_uid = task.target_index_uid().unwrap_or(index_uid);
+        
+        // Extract the source path from the task kind
+        let source_path = if let meilisearch_types::tasks::KindWithContent::SingleIndexSnapshotImport { source_path, .. } = &task.kind {
+            source_path.clone()
+        } else {
+            return Err(Error::Internal("Missing source path for snapshot import".to_string()));
+        };
+        
+        // Extract target_index_uid from the task kind if available
+        let target_index_uid = if let meilisearch_types::tasks::KindWithContent::SingleIndexSnapshotImport { target_index_uid, .. } = &task.kind {
+            target_index_uid.clone().unwrap_or_else(|| index_uid.to_string())
+        } else {
+            index_uid.to_string()
+        };
 
         tracing::info!(target: "index_scheduler", 
             "Importing snapshot from '{}' to index '{}'", 
@@ -94,7 +104,7 @@ impl IndexScheduler {
         let index_uuid = Uuid::new_v4();
         
         // Create the index directory
-        let index_path = self.index_mapper.index_path(index_uuid);
+        let index_path = self.index_mapper.index_directory().join(index_uuid.to_string());
         fs::create_dir_all(&index_path)?;
         
         // Copy index data from snapshot
@@ -141,7 +151,9 @@ impl IndexScheduler {
             
             // Update the task with the number of imported documents
             if let Some(details) = &mut task.details {
-                details.set_imported_documents(Some(document_count));
+                if let meilisearch_types::tasks::Details::SingleIndexSnapshotImport { imported_documents, .. } = details {
+                    *imported_documents = Some(document_count);
+                }
             }
         }
 

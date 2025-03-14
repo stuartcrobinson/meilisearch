@@ -1,6 +1,6 @@
-use std::ffi::OsStr;
 use std::fs;
 use std::path::{Path, PathBuf};
+use std::time::SystemTime;
 
 use meilisearch_types::heed::CompactionOption;
 use meilisearch_types::milli::progress::Progress;
@@ -19,7 +19,14 @@ impl IndexScheduler {
         // We expect exactly one task for single index snapshot creation
         let task = &tasks[0];
         let index_uid = task.index_uid().unwrap();
-        let snapshot_path = task.snapshot_path().unwrap();
+        
+        // Extract the snapshot path from the task kind
+        let snapshot_path = if let meilisearch_types::tasks::KindWithContent::SingleIndexSnapshotCreation { snapshot_path, .. } = &task.kind {
+            snapshot_path.clone()
+        } else {
+            // Generate a default path if not specified
+            format!("{}-{}.snapshot", index_uid, SystemTime::now().duration_since(SystemTime::UNIX_EPOCH).unwrap().as_secs())
+        };
 
         tracing::info!(target: "index_scheduler", "Creating snapshot for index '{}'", index_uid);
         progress.update_progress(SingleIndexSnapshotCreationProgress::StartingSnapshot);
@@ -64,7 +71,7 @@ impl IndexScheduler {
         // Create a simple metadata file with index information
         let metadata = serde_json::json!({
             "index_uid": index_uid,
-            "created_at": chrono::Utc::now().to_rfc3339(),
+            "created_at": SystemTime::now().duration_since(SystemTime::UNIX_EPOCH).unwrap().as_secs(),
             "meilisearch_version": env!("CARGO_PKG_VERSION"),
         });
         

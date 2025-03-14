@@ -92,51 +92,29 @@ make_enum_progress! {
 }
 
 make_enum_progress! {
-    /// Represents the different steps of a single index snapshot creation process
-    #[derive(Debug, Clone, Copy)]
     pub enum SingleIndexSnapshotCreationProgress {
-        /// We're starting the snapshot creation process for the index
         StartingSnapshot,
-        /// Creating the temporary directory for the snapshot
         CreatingTempDirectory,
-        /// Copying the version file to ensure compatibility when importing
         CopyingVersionFile,
-        /// Snapshotting the index and its LMDB environment
         SnapshotIndexEnvironment,
-        /// Creating the snapshot metadata with index details
         CreatingMetadata,
-        /// Compressing the snapshot into a tarball
         CreatingTarball,
-        /// Moving the snapshot to its final location
         MovingSnapshot,
-        /// Setting file permissions on the snapshot
         SettingPermissions,
     }
 }
 
 make_enum_progress! {
-    /// Represents the different steps of a single index snapshot import process
-    #[derive(Debug, Clone, Copy)]
     pub enum SingleIndexSnapshotImportProgress {
-        /// We're starting the snapshot import process
         StartingImport,
-        /// Creating a temporary directory for extraction
         CreatingTempDirectory,
-        /// Extracting the tarball snapshot
         ExtractingSnapshot,
-        /// Validating snapshot version compatibility
         ValidatingVersion,
-        /// Reading snapshot metadata
         ReadingMetadata,
-        /// Validating snapshot integrity
         ValidatingIntegrity,
-        /// Creating or replacing the target index
         CreatingTargetIndex,
-        /// Copying index data from snapshot
         CopyingIndexData,
-        /// Updating index mappings in the scheduler
         UpdatingIndexMappings,
-        /// Performing final verification
         VerifyingImport,
     }
 }
