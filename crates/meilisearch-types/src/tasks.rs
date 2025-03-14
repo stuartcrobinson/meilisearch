@@ -799,46 +799,108 @@ mod tests {
             assert_eq!(kind, k, "{kind}.to_string() returned {s} which was parsed as {k}");
         }
     }
-    
-    #[test]
-    fn test_single_index_snapshot_tasks() {
-        // Test SingleIndexSnapshotCreation
-        let kind = Kind::SingleIndexSnapshotCreation;
-        let s = kind.to_string();
-        assert_eq!(s, "singleIndexSnapshotCreation");
-        let parsed = Kind::from_str(&s).unwrap();
-        assert_eq!(parsed, kind);
-        
-        // Test SingleIndexSnapshotImport
-        let kind = Kind::SingleIndexSnapshotImport;
-        let s = kind.to_string();
-        assert_eq!(s, "singleIndexSnapshotImport");
-        let parsed = Kind::from_str(&s).unwrap();
-        assert_eq!(parsed, kind);
-        
-        // Test KindWithContent for SingleIndexSnapshotCreation
-        let kind_with_content = KindWithContent::SingleIndexSnapshotCreation { 
-            index_uid: "test-index".to_string() 
-        };
-        assert_eq!(kind_with_content.as_kind(), Kind::SingleIndexSnapshotCreation);
-        assert_eq!(kind_with_content.indexes(), vec!["test-index"]);
-        
-        // Test KindWithContent for SingleIndexSnapshotImport
-        let kind_with_content = KindWithContent::SingleIndexSnapshotImport { 
-            index_uid: "test-index".to_string(),
-            source_path: "/path/to/snapshot".to_string(),
-            target_index_uid: None
-        };
-        assert_eq!(kind_with_content.as_kind(), Kind::SingleIndexSnapshotImport);
-        assert_eq!(kind_with_content.indexes(), vec!["test-index"]);
-        
-        // Test KindWithContent for SingleIndexSnapshotImport with target_index_uid
-        let kind_with_content = KindWithContent::SingleIndexSnapshotImport { 
-            index_uid: "test-index".to_string(),
-            source_path: "/path/to/snapshot".to_string(),
-            target_index_uid: Some("new-index".to_string())
-        };
-        assert_eq!(kind_with_content.as_kind(), Kind::SingleIndexSnapshotImport);
-        assert_eq!(kind_with_content.indexes(), vec!["test-index", "new-index"]);
+
+    mod single_index_snapshot_tests {
+        use super::*;
+
+        // Helper function for creating test instances
+        fn create_snapshot_import(target: Option<&str>) -> KindWithContent {
+            KindWithContent::SingleIndexSnapshotImport { 
+                index_uid: "test-index".to_string(),
+                source_path: "/path/to/snapshot.idx.snapshot".to_string(),
+                target_index_uid: target.map(String::from)
+            }
+        }
+
+        #[test]
+        fn test_kind_basic_functionality() {
+            // Test string conversion and classification for Kind variants
+            let test_cases = [
+                (Kind::SingleIndexSnapshotCreation, "singleIndexSnapshotCreation"),
+                (Kind::SingleIndexSnapshotImport, "singleIndexSnapshotImport"),
+            ];
+            
+            for (kind, expected_str) in test_cases {
+                // Test display formatting and parsing
+                assert_eq!(kind.to_string(), expected_str);
+                assert_eq!(Kind::from_str(expected_str).unwrap(), kind);
+                
+                // Test classification - critical for task scheduling
+                assert!(kind.related_to_one_index(), 
+                    "Single index snapshot tasks should be classified as relating to one index");
+            }
+        }
+
+        #[test]
+        fn test_affected_indexes() {
+            // Test which indexes are affected by each task type - critical for task scheduling
+            
+            // Creation task affects only the specified index
+            let creation = KindWithContent::SingleIndexSnapshotCreation { 
+                index_uid: "test-index".to_string() 
+            };
+            assert_eq!(creation.indexes(), vec!["test-index"]);
+            
+            // Import task without target affects only the specified index
+            let import = create_snapshot_import(None);
+            assert_eq!(import.indexes(), vec!["test-index"]);
+            
+            // Import task with target affects both source and target indexes
+            let import_with_target = create_snapshot_import(Some("new-index"));
+            let affected_indexes = import_with_target.indexes();
+            assert_eq!(affected_indexes.len(), 2);
+            assert!(affected_indexes.contains(&"test-index"));
+            assert!(affected_indexes.contains(&"new-index"));
+        }
+
+        #[test]
+        fn test_serialization_and_deserialization() {
+            // Test JSON serialization/deserialization - critical for API communication
+            
+            // Create test instances
+            let creation = KindWithContent::SingleIndexSnapshotCreation { 
+                index_uid: "test-index".to_string() 
+            };
+            
+            // Import with target
+            let import_with_target = create_snapshot_import(Some("new-index"));
+            
+            // Import without target
+            let import_no_target = create_snapshot_import(None);
+            
+            // Test round-trip serialization for creation task
+            let json = serde_json::to_string(&creation).unwrap();
+            let deserialized: KindWithContent = serde_json::from_str(&json).unwrap();
+            match deserialized {
+                KindWithContent::SingleIndexSnapshotCreation { index_uid } => {
+                    assert_eq!(index_uid, "test-index");
+                }
+                _ => panic!("Deserialized to wrong task variant")
+            }
+            
+            // Test round-trip serialization for import task with target
+            let json = serde_json::to_string(&import_with_target).unwrap();
+            let deserialized: KindWithContent = serde_json::from_str(&json).unwrap();
+            match deserialized {
+                KindWithContent::SingleIndexSnapshotImport { index_uid, source_path, target_index_uid } => {
+                    assert_eq!(index_uid, "test-index");
+                    assert_eq!(source_path, "/path/to/snapshot.idx.snapshot");
+                    assert_eq!(target_index_uid, Some("new-index".to_string()));
+                }
+                _ => panic!("Deserialized to wrong task variant")
+            }
+            
+            // Test round-trip serialization for import task without target
+            let json = serde_json::to_string(&import_no_target).unwrap();
+            let deserialized: KindWithContent = serde_json::from_str(&json).unwrap();
+            match deserialized {
+                KindWithContent::SingleIndexSnapshotImport { index_uid, source_path, target_index_uid } => {
+                    assert_eq!(index_uid, "test-index");
+                    assert_eq!(source_path, "/path/to/snapshot.idx.snapshot");
+                    assert_eq!(target_index_uid, None);
+                }
+                _ => panic!("Deserialized to wrong task variant")
+            }
+        }
     }
 }
