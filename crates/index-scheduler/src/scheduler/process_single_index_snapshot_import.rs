@@ -74,7 +74,8 @@ impl IndexScheduler {
         let metadata_path = temp_dir.path().join("metadata.json");
         let metadata = if metadata_path.exists() {
             let metadata_content = fs::read_to_string(&metadata_path)?;
-            Some(serde_json::from_str::<serde_json::Value>(&metadata_content)?)
+            Some(serde_json::from_str::<serde_json::Value>(&metadata_content)
+                .map_err(|e| Error::SerdeJson(e))?)
         } else {
             None
         };

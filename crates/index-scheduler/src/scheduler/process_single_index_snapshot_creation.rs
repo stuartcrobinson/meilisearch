@@ -77,7 +77,9 @@ impl IndexScheduler {
         });
         
         let metadata_path = temp_snapshot_dir.path().join("metadata.json");
-        fs::write(metadata_path, serde_json::to_string_pretty(&metadata)?)?;
+        let metadata_json = serde_json::to_string_pretty(&metadata)
+            .map_err(|e| Error::SerdeJson(e))?;
+        fs::write(metadata_path, metadata_json)?;
         
         // Release the read transaction
         drop(rtxn);

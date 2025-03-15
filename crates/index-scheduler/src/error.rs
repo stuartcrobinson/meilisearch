@@ -57,6 +57,8 @@ pub enum Error {
     IndexAlreadyExists(String),
     #[error("Invalid snapshot format: {0}. Snapshot files must have a .snapshot extension.")]
     InvalidSnapshotFormat(String),
+    #[error("{0}")]
+    Internal(String),
     #[error(
         "Indexes must be declared only once during a swap. `{0}` was specified several times."
     )]
@@ -148,6 +150,8 @@ pub enum Error {
 
     #[error(transparent)]
     Anyhow(#[from] anyhow::Error),
+    #[error(transparent)]
+    SerdeJson(#[from] serde_json::Error),
 
     // Irrecoverable errors:
     #[error(transparent)]
@@ -280,6 +284,8 @@ impl ErrorCode for Error {
             Error::FeatureNotEnabled(_) => Code::FeatureNotEnabled,
             Error::SnapshotVersionFileNotFound => Code::Internal,
             Error::SnapshotMissingIndexData => Code::Internal,
+            Error::Internal(_) => Code::Internal,
+            Error::SerdeJson(_) => Code::Internal,
 
             // Irrecoverable errors
             Error::Anyhow(_) => Code::Internal,
