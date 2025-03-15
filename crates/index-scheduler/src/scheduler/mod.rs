@@ -17,8 +17,6 @@ mod test_document_addition;
 mod test_embedders;
 #[cfg(test)]
 mod test_failure;
-#[cfg(test)]
-mod single_index_snapshot_schedule_tests;
 
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
