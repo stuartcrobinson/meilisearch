@@ -1,12 +1,12 @@
 use meilisearch_types::tasks::{KindWithContent, Status, Task};
 use uuid::Uuid;
 
-use crate::test_utils::IndexSchedulerHandle;
+use crate::{IndexScheduler, test_utils::IndexSchedulerHandle};
 
 #[test]
 fn test_single_index_snapshot_creation_task_enqueuing() {
     let dir = tempfile::tempdir().unwrap();
-    let scheduler = IndexSchedulerHandle::new(&dir);
+    let (_, scheduler) = IndexScheduler::test(true, vec![]);
     
     // Create an index first
     let index_uid = "test_index";
@@ -38,7 +38,7 @@ fn test_single_index_snapshot_creation_task_enqueuing() {
 #[test]
 fn test_single_index_snapshot_import_task_enqueuing() {
     let dir = tempfile::tempdir().unwrap();
-    let scheduler = IndexSchedulerHandle::new(&dir);
+    let (_, scheduler) = IndexScheduler::test(true, vec![]);
     
     // Create an index first
     let index_uid = "test_index";
@@ -72,7 +72,7 @@ fn test_single_index_snapshot_import_task_enqueuing() {
 #[test]
 fn test_single_index_snapshot_import_with_target_task_enqueuing() {
     let dir = tempfile::tempdir().unwrap();
-    let scheduler = IndexSchedulerHandle::new(&dir);
+    let (_, scheduler) = IndexScheduler::test(true, vec![]);
     
     // Create source and target indices
     let source_index_uid = "source_index";
@@ -169,7 +169,7 @@ mod mock_processing {
 fn test_single_index_snapshot_task_state_transitions() {
     
     let dir = tempfile::tempdir().unwrap();
-    let mut scheduler = IndexSchedulerHandle::new(&dir);
+    let (index_scheduler, mut scheduler) = IndexScheduler::test(true, vec![]);
     
     // Create an index
     let index_uid = "test_index";
@@ -206,7 +206,7 @@ fn test_single_index_snapshot_task_state_transitions() {
 fn test_single_index_snapshot_import_task_state_transitions() {
     
     let dir = tempfile::tempdir().unwrap();
-    let mut scheduler = IndexSchedulerHandle::new(&dir);
+    let (index_scheduler, mut scheduler) = IndexScheduler::test(true, vec![]);
     
     // Create an index
     let index_uid = "test_index";
@@ -242,7 +242,7 @@ fn test_single_index_snapshot_import_task_state_transitions() {
     // Verify details were updated
     if let Some(details) = &task.details {
         if let meilisearch_types::tasks::Details::SingleIndexSnapshotImport { imported_documents, .. } = details {
-            assert_eq!(*imported_documents, Some(100));
+            assert_eq!(imported_documents, &Some(100));
         } else {
             panic!("Expected SingleIndexSnapshotImport details");
         }
