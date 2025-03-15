@@ -1,10 +1,7 @@
-use std::path::Path;
-
 use meilisearch_types::tasks::{KindWithContent, Status, Task};
-use time::OffsetDateTime;
 use uuid::Uuid;
 
-use crate::index_scheduler::test_helpers::IndexSchedulerHandle;
+use crate::test_helpers::IndexSchedulerHandle;
 
 #[test]
 fn test_single_index_snapshot_creation_task_enqueuing() {
@@ -32,7 +29,7 @@ fn test_single_index_snapshot_creation_task_enqueuing() {
     
     if let KindWithContent::SingleIndexSnapshotCreation { index_uid: task_index_uid, snapshot_path: task_snapshot_path } = &task.kind {
         assert_eq!(task_index_uid, index_uid);
-        assert_eq!(task_snapshot_path, &snapshot_path);
+        assert_eq!(task_snapshot_path, snapshot_path);
     } else {
         panic!("Expected SingleIndexSnapshotCreation task");
     }
@@ -65,8 +62,8 @@ fn test_single_index_snapshot_import_task_enqueuing() {
     
     if let KindWithContent::SingleIndexSnapshotImport { index_uid: task_index_uid, source_path: task_source_path, target_index_uid } = &task.kind {
         assert_eq!(task_index_uid, index_uid);
-        assert_eq!(task_source_path, &source_path);
-        assert_eq!(target_index_uid, &None);
+        assert_eq!(task_source_path, source_path);
+        assert_eq!(target_index_uid, None);
     } else {
         panic!("Expected SingleIndexSnapshotImport task");
     }
@@ -100,8 +97,8 @@ fn test_single_index_snapshot_import_with_target_task_enqueuing() {
     
     if let KindWithContent::SingleIndexSnapshotImport { index_uid: task_index_uid, source_path: task_source_path, target_index_uid: task_target_index_uid } = &task.kind {
         assert_eq!(task_index_uid, source_index_uid);
-        assert_eq!(task_source_path, &source_path);
-        assert_eq!(task_target_index_uid, &Some(target_index_uid.to_string()));
+        assert_eq!(task_source_path, source_path);
+        assert_eq!(task_target_index_uid, Some(target_index_uid.to_string()));
     } else {
         panic!("Expected SingleIndexSnapshotImport task");
     }
@@ -118,7 +115,7 @@ mod mock_processing {
         // Mock method for testing snapshot creation
         pub fn mock_process_single_index_snapshot_creation(
             &self,
-            progress: Progress,
+            _progress: Progress,
             mut tasks: Vec<Task>,
         ) -> crate::Result<Vec<Task>> {
             // Update task status to processing
@@ -140,7 +137,7 @@ mod mock_processing {
         // Mock method for testing snapshot import
         pub fn mock_process_single_index_snapshot_import(
             &self,
-            progress: Progress,
+            _progress: Progress,
             mut tasks: Vec<Task>,
         ) -> crate::Result<Vec<Task>> {
             // Update task status to processing
@@ -247,7 +244,7 @@ fn test_single_index_snapshot_import_task_state_transitions() {
     // Verify details were updated
     if let Some(details) = &task.details {
         if let meilisearch_types::tasks::Details::SingleIndexSnapshotImport { imported_documents, .. } = details {
-            assert_eq!(*imported_documents, Some(100));
+            assert_eq!(*imported_documents, Some(100u64));
         } else {
             panic!("Expected SingleIndexSnapshotImport details");
         }
