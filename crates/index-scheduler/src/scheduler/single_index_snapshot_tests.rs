@@ -55,11 +55,14 @@ fn test_single_index_snapshot_creation() {
     snapshot!(snapshot_index_scheduler(&index_scheduler), name: "after_index_setup");
     
     // Now register the snapshot creation task
+    // Create snapshot directory
+    std::fs::create_dir_all("snapshots").unwrap();
+    
     index_scheduler
         .register(
             KindWithContent::SingleIndexSnapshotCreation { 
                 index_uid: S("test-index"),
-                snapshot_path: S("test-index-snapshot.tar.gz")
+                snapshot_path: S("snapshots/test-index-snapshot.tar.gz")
             },
             None,
             false,
@@ -79,7 +82,6 @@ fn test_single_index_snapshot_creation() {
     snapshot!(snapshot_index_scheduler(&index_scheduler), name: "after_snapshot_creation");
     
     // Verify the task has succeeded
-    let rtxn = index_scheduler.env.read_txn().unwrap();
     // Use get_tasks_from_authorized_indexes with an empty filter to get all tasks
     let (tasks, _) = index_scheduler.get_tasks_from_authorized_indexes(
         &Query::default(), 
@@ -89,7 +91,7 @@ fn test_single_index_snapshot_creation() {
         matches!(t.kind, KindWithContent::SingleIndexSnapshotCreation { .. })
     ).unwrap();
     
-    snapshot!(snapshot_task.status, @"Succeeded");
+    snapshot!(format!("{:?}", snapshot_task.status).to_lowercase(), @"succeeded");
 }
 
 #[test]
@@ -137,12 +139,15 @@ fn test_single_index_snapshot_import() {
     // Process index creation and document addition
     handle.advance_n_successful_batches(2);
     
+    // Create snapshot directory
+    std::fs::create_dir_all("snapshots").unwrap();
+    
     // Create snapshot of source index
     index_scheduler
         .register(
             KindWithContent::SingleIndexSnapshotCreation { 
                 index_uid: S("source-index"),
-                snapshot_path: S("source-index-snapshot.tar.gz") 
+                snapshot_path: S("snapshots/source-index-snapshot.tar.gz") 
             },
             None,
             false,
@@ -156,7 +161,7 @@ fn test_single_index_snapshot_import() {
         .register(
             KindWithContent::SingleIndexSnapshotImport { 
                 index_uid: S("temp-uid"),
-                source_path: S("source-index-snapshot.tar.gz"),
+                source_path: S("snapshots/source-index-snapshot.tar.gz"),
                 target_index_uid: Some(S("target-index"))
             },
             None,
@@ -260,7 +265,7 @@ fn test_snapshot_task_priorities() {
     
     // Snapshot task should be completed, document task should still be enqueued
     snapshot!(snapshot_task.status, @"Succeeded");
-    snapshot!(doc_task.status, @"Enqueued");
+    snapshot!(format!("{:?}", doc_task.status).to_lowercase(), @"enqueued");
     
     // Process the remaining task
     handle.advance_one_successful_batch();
@@ -285,12 +290,15 @@ fn test_snapshot_concurrent_operations() {
     
     handle.advance_one_successful_batch();
     
+    // Create snapshot directory
+    std::fs::create_dir_all("snapshots").unwrap();
+    
     // Start a snapshot task
     index_scheduler
         .register(
             KindWithContent::SingleIndexSnapshotCreation { 
                 index_uid: S("test-index"),
-                snapshot_path: S("test-index-snapshot.tar.gz")
+                snapshot_path: S("snapshots/test-index-snapshot.tar.gz")
             },
             None,
             false,
