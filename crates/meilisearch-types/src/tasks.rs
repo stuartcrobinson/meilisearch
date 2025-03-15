@@ -1131,6 +1131,8 @@ mod tests {
 
     #[cfg(test)]
     mod single_index_snapshot_task_content_uuid_test {
+        use super::{KindWithContent, Status, Task};
+        use time::OffsetDateTime;
 
         #[test]
         fn test_snapshot_task_content_uuid() {
