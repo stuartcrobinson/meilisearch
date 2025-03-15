@@ -966,6 +966,53 @@ mod tests {
         use super::*;
         use serde_json::json;
 
+        use crate::tasks::{KindWithContent, Status, Task};
+        use time::OffsetDateTime;
+
+        #[test]
+        fn test_snapshot_task_content_uuid() {
+            // Create snapshot creation task
+            let creation_task = Task {
+                uid: 1,
+                kind: KindWithContent::SingleIndexSnapshotCreation { 
+                    index_uid: "test".to_string(),
+                    snapshot_path: "path.snapshot".to_string()
+                },
+                // Other required fields with test values
+                batch_uid: None,
+                enqueued_at: OffsetDateTime::now_utc(),
+                started_at: None,
+                finished_at: None,
+                error: None,
+                canceled_by: None,
+                details: None,
+                status: Status::Enqueued
+            };
+            
+            // Create snapshot import task
+            let import_task = Task {
+                uid: 2,
+                kind: KindWithContent::SingleIndexSnapshotImport { 
+                    index_uid: "test".to_string(),
+                    source_path: "path.snapshot".to_string(),
+                    target_index_uid: None
+                },
+                // Other required fields with test values
+                batch_uid: None,
+                enqueued_at: OffsetDateTime::now_utc(),
+                started_at: None,
+                finished_at: None,
+                error: None,
+                canceled_by: None,
+                details: None,
+                status: Status::Enqueued
+            };
+            
+            // Verify neither task creates content files
+            assert_eq!(creation_task.content_uuid(), None);
+            assert_eq!(import_task.content_uuid(), None);
+        }
+
         #[test]
         fn test_single_index_snapshot_details_serialization() {
             // Define test cases with (details_instance, expected_json_value)
@@ -1129,53 +1176,4 @@ mod tests {
 
     }
 
-    #[cfg(test)]
-    mod single_index_snapshot_task_content_uuid_test {
-        use crate::tasks::{KindWithContent, Status, Task};
-        use time::OffsetDateTime;
-
-        #[test]
-        fn test_snapshot_task_content_uuid() {
-            // Create snapshot creation task
-            let creation_task = Task {
-                uid: 1,
-                kind: KindWithContent::SingleIndexSnapshotCreation { 
-                    index_uid: "test".to_string(),
-                    snapshot_path: "path.snapshot".to_string()
-                },
-                // Other required fields with test values
-                batch_uid: None,
-                enqueued_at: OffsetDateTime::now_utc(),
-                started_at: None,
-                finished_at: None,
-                error: None,
-                canceled_by: None,
-                details: None,
-                status: Status::Enqueued
-            };
-            
-            // Create snapshot import task
-            let import_task = Task {
-                uid: 2,
-                kind: KindWithContent::SingleIndexSnapshotImport { 
-                    index_uid: "test".to_string(),
-                    source_path: "path.snapshot".to_string(),
-                    target_index_uid: None
-                },
-                // Other required fields with test values
-                batch_uid: None,
-                enqueued_at: OffsetDateTime::now_utc(),
-                started_at: None,
-                finished_at: None,
-                error: None,
-                canceled_by: None,
-                details: None,
-                status: Status::Enqueued
-            };
-            
-            // Verify neither task creates content files
-            assert_eq!(creation_task.content_uuid(), None);
-            assert_eq!(import_task.content_uuid(), None);
-        }
-    }
 }
