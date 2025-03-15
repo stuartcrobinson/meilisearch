@@ -1,7 +1,8 @@
 use big_s::S;
 use meili_snap::snapshot;
-use meilisearch_types::tasks::{KindWithContent, Status};
-use tempfile;
+use meilisearch_types::tasks::{KindWithContent};
+use meilisearch_auth::AuthFilter;
+use crate::queue::Query;
 
 use crate::insta_snapshot::snapshot_index_scheduler;
 use crate::test_utils::Breakpoint;
@@ -79,7 +80,11 @@ fn test_single_index_snapshot_creation() {
     
     // Verify the task has succeeded
     let rtxn = index_scheduler.env.read_txn().unwrap();
-    let tasks = index_scheduler.get_tasks(&rtxn).unwrap();
+    // Use get_tasks_from_authorized_indexes with an empty filter to get all tasks
+    let (tasks, _) = index_scheduler.get_tasks_from_authorized_indexes(
+        &Query::default(), 
+        &AuthFilter::default()
+    ).unwrap();
     let snapshot_task = tasks.iter().find(|t| 
         matches!(t.kind, KindWithContent::SingleIndexSnapshotCreation { .. })
     ).unwrap();
@@ -238,8 +243,11 @@ fn test_snapshot_task_priorities() {
     // Process one batch - snapshot should be processed first due to higher priority
     handle.advance_one_successful_batch();
     
-    let rtxn = index_scheduler.env.read_txn().unwrap();
-    let tasks = index_scheduler.get_tasks(&rtxn).unwrap();
+    // Get all tasks using get_tasks_from_authorized_indexes
+    let (tasks, _) = index_scheduler.get_tasks_from_authorized_indexes(
+        &Query::default(), 
+        &AuthFilter::default()
+    ).unwrap();
     
     // Find snapshot and document tasks
     let snapshot_task = tasks.iter().find(|t| 
