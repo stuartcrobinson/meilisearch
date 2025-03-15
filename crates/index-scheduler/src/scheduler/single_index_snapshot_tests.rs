@@ -213,6 +213,9 @@ fn test_snapshot_task_priorities() {
     
     handle.advance_one_successful_batch();
     
+    // Create snapshot directory
+    std::fs::create_dir_all("snapshots").unwrap();
+    
     // Register a document addition and snapshot task
     let content = r#"{"id": 1, "title": "Test document"}"#;
     let (uuid, mut file) = index_scheduler.queue.create_update_file_with_uuid(0).unwrap();
@@ -238,7 +241,7 @@ fn test_snapshot_task_priorities() {
         .register(
             KindWithContent::SingleIndexSnapshotCreation { 
                 index_uid: S("test-index"),
-                snapshot_path: S("test-index-snapshot.tar.gz")
+                snapshot_path: S("snapshots/test-index-snapshot.tar.gz")
             },
             None,
             false,
