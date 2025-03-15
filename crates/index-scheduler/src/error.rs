@@ -217,7 +217,9 @@ impl Error {
             | Error::IoError(_)
             | Error::Persist(_)
             | Error::FeatureNotEnabled(_)
-            | Error::Anyhow(_) => true,
+            | Error::Anyhow(_)
+            | Error::SerdeJson(_)
+            | Error::Internal(_) => true,
             Error::CreateBatch(_)
             | Error::CorruptedTaskQueue
             | Error::DatabaseUpgrade(_)
