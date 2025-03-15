@@ -1,7 +1,7 @@
 use meilisearch_types::tasks::{KindWithContent, Status, Task};
 use uuid::Uuid;
 
-use crate::test_helpers::IndexSchedulerHandle;
+use crate::test_utils::IndexSchedulerHandle;
 
 #[test]
 fn test_single_index_snapshot_creation_task_enqueuing() {
@@ -167,7 +167,6 @@ mod mock_processing {
 
 #[test]
 fn test_single_index_snapshot_task_state_transitions() {
-    use mock_processing::*;
     
     let dir = tempfile::tempdir().unwrap();
     let mut scheduler = IndexSchedulerHandle::new(&dir);
@@ -205,7 +204,6 @@ fn test_single_index_snapshot_task_state_transitions() {
 
 #[test]
 fn test_single_index_snapshot_import_task_state_transitions() {
-    use mock_processing::*;
     
     let dir = tempfile::tempdir().unwrap();
     let mut scheduler = IndexSchedulerHandle::new(&dir);
@@ -244,7 +242,7 @@ fn test_single_index_snapshot_import_task_state_transitions() {
     // Verify details were updated
     if let Some(details) = &task.details {
         if let meilisearch_types::tasks::Details::SingleIndexSnapshotImport { imported_documents, .. } = details {
-            assert_eq!(*imported_documents, Some(100u64));
+            assert_eq!(*imported_documents, Some(100));
         } else {
             panic!("Expected SingleIndexSnapshotImport details");
         }
