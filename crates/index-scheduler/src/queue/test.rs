@@ -443,22 +443,27 @@ mod msfj_sis_tests { // Renamed module
     assert_eq!(task.kind.as_kind(), kind.as_kind());
     assert!(task.details.is_some()); // Default details should be set
 
+    // The snapshot format changed due to modifications in Task serialization (nested kind/details)
     snapshot!(json_string!(task, { ".enqueuedAt" => "[date]" }), @r###"
     {
       "uid": 0,
       "batchUid": null,
-      "indexUid": "catto",
-      "status": "enqueued",
-      "type": "snapshotCreation",
-      "canceledBy": null,
-      "details": {
-        "snapshotUid": null
-      },
-      "error": null,
-      "duration": null,
       "enqueuedAt": "[date]",
       "startedAt": null,
-      "finishedAt": null
+      "finishedAt": null,
+      "error": null,
+      "canceledBy": null,
+      "details": {
+        "SingleIndexSnapshotCreation": {
+          "snapshot_uid": null
+        }
+      },
+      "status": "enqueued",
+      "kind": {
+        "singleIndexSnapshotCreation": {
+          "index_uid": "catto"
+        }
+      }
     }
     "###);
 
