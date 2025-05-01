@@ -47,7 +47,10 @@ This guide outlines the steps for implementing the core backend functionality, s
     *   Add corresponding variants to the `KindWithContent` enum.
         *   `SingleIndexSnapshotCreation` payload: Needs `index_uid: String`.
         *   `SingleIndexSnapshotImport` payload: Needs `source_snapshot_path: String` (path accessible by the Meilisearch instance, likely within `snapshots_path`) and `target_index_uid: String` (the desired final name for the imported index).
-    *   Add corresponding variants to the `Details` enum (e.g., `SingleIndexSnapshotCreation { snapshot_uid: Option<String> }`, `SingleIndexSnapshotImport { source_snapshot_uid: String, target_index_uid: String }`). Using a generated, unique snapshot UID is recommended.
+    *   Add corresponding variants to the `Details` enum:
+        *   `SingleIndexSnapshotCreation { snapshot_uid: Option<String> }` (Stores the unique identifier generated during creation, used in the snapshot filename).
+        *   `SingleIndexSnapshotImport { source_snapshot_uid: String, target_index_uid: String }` (`source_snapshot_uid` refers to the UID embedded in the source snapshot's filename).
+        *   Using a generated, unique snapshot UID (e.g., timestamp-based or UUID) is recommended.
     *   Update necessary `impl` blocks (`as_kind`, `indexes`, `default_details`).
 *   **Testing (TDD)**: Write unit tests verifying the new enum variants exist, have the correct payloads, and `Task::index_uid()`/`default_details()` behave as expected. Test serialization/deserialization.
 
