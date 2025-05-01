@@ -43,13 +43,8 @@ tokio = "1.43"
 utoipa = { version = "5.3.1", features = ["macros"] }
 uuid = { version = "1.11.0", features = ["serde", "v4"] }
 
-[features]
-# General flag for all custom tests in the meilisearchfj fork
-msfj = []
-# Specific flag for single-index snapshot tests
-msfj-sis = ["msfj"] # msfj-sis implies msfj
-
 # all specialized tokenizations
+[features]
 all-tokenizations = ["milli/all-tokenizations"]
 
 # chinese specialized tokenization

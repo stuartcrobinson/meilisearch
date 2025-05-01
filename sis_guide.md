@@ -36,15 +36,11 @@ This guide outlines the steps for implementing the core backend functionality, s
 *   **Isolation**: Add new code paths (enums, functions, modules) rather than modifying existing full snapshot logic.
 *   **Incremental Development & TDD**: Each step should result in testable backend functionality. Tests will initially involve manually constructing and registering tasks.
 *   **Clarity**: Define task payloads, snapshot format, and processing logic clearly.
-*   **Test Separation**: To easily distinguish custom tests for this fork (`meilisearchfj`) from upstream Meilisearch tests (aiding maintainability and merging), use a combination of feature flags and naming conventions:
-    *   **Define Features**: In the `Cargo.toml` for each crate containing custom tests, define:
-        *   A general feature flag: `msfj` (for all custom tests in this fork).
-        *   A specific feature flag for the functionality being tested, e.g., `msfj-sis` (for Single Index Snapshot tests), which should depend on `msfj` (e.g., `msfj-sis = ["msfj"]`).
-    *   **Tag Tests**: Apply the specific feature flag attribute (e.g., `#[cfg(feature = "msfj-sis")]`) to custom test modules or entire test files. This ensures they are compiled only when the feature is active.
-    *   **Name Tests**: Prefix custom test modules or filenames with the specific feature identifier (e.g., `mod msfj_sis_tests { ... }` or `tests/msfj_sis_tasks.rs`).
-    *   **Run Tests**:
-        *   Run *all* custom tests: `cargo test --features msfj msfj_` (filters by the general prefix)
-        *   Run *only* Single Index Snapshot tests: `cargo test --features msfj-sis msfj_sis_` (enables the feature and filters by the specific prefix)
+*   **Test Separation**: To easily distinguish custom tests for this fork (`meilisearchfj`) from upstream Meilisearch tests (aiding maintainability and merging), use a naming convention:
+    *   **Name Tests**: Prefix custom test modules or filenames with a unique identifier (e.g., `mod msfj_sis_tests { ... }` or `tests/msfj_sis_tasks.rs`). Use a general prefix like `msfj_` for all custom tests and more specific ones like `msfj_sis_` for feature-specific tests.
+    *   **Run Tests**: Use `cargo test` with a filter argument matching the prefix:
+        *   Run *all* custom tests: `cargo test msfj_`
+        *   Run *only* Single Index Snapshot tests: `cargo test msfj_sis_`
 
 ### Implementation Steps:
 
