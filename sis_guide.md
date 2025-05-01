@@ -36,6 +36,9 @@ This guide outlines the steps for implementing the core backend functionality, s
 *   **Isolation**: Add new code paths (enums, functions, modules) rather than modifying existing full snapshot logic.
 *   **Incremental Development & TDD**: Each step should result in testable backend functionality. Tests will initially involve manually constructing and registering tasks.
 *   **Clarity**: Define task payloads, snapshot format, and processing logic clearly.
+*   **Test Separation**: To easily distinguish custom tests for this feature from upstream Meilisearch tests (aiding maintainability and merging), follow this strategy:
+    *   **Integration Tests**: Place integration tests (typically in a crate's `tests/` directory) in *new, separate files* named specifically for the feature (e.g., `tests/single_index_snapshot_tasks.rs`).
+    *   **Unit/Inline Tests**: For tests located within a source file (`src/some_module.rs`), group them inside a *dedicated module* within the `#[cfg(test)]` section (e.g., `mod single_index_snapshot_tests { ... }`).
 
 ### Implementation Steps:
 
