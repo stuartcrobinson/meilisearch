@@ -28,18 +28,20 @@ fn test_single_index_snapshot_import_kind() {
     assert!(kind_content.indexes().is_empty());
 
     let details = kind_content.default_details();
+    // default_details uses file_stem, which includes intermediate extensions
     match details {
         Some(Details::SingleIndexSnapshotImport { source_snapshot_uid, target_index_uid }) => {
-            assert_eq!(source_snapshot_uid, "12345");
+            assert_eq!(source_snapshot_uid, "12345.snapshot.tar"); // Expect UID with extensions
             assert_eq!(target_index_uid, "imported_test");
         }
         _ => panic!("Expected Details::SingleIndexSnapshotImport"),
     }
 
     let finished_details = kind_content.default_finished_details();
+    // default_finished_details uses file_stem, which includes intermediate extensions
     match finished_details {
         Some(Details::SingleIndexSnapshotImport { source_snapshot_uid, target_index_uid }) => {
-            assert_eq!(source_snapshot_uid, "12345");
+            assert_eq!(source_snapshot_uid, "12345.snapshot.tar"); // Expect UID with extensions
             assert_eq!(target_index_uid, "imported_test");
         }
         _ => panic!("Expected Details::SingleIndexSnapshotImport for finished details"),
@@ -53,10 +55,10 @@ fn test_single_index_snapshot_import_kind_no_uid_in_path() {
         target_index_uid: "imported_test".to_string(),
     };
     let details = kind_content.default_details();
-    // When no UID is found after '-', the filename stem is used.
+    // When no UID is found after '-', the filename stem (with extensions) is used.
     match details {
         Some(Details::SingleIndexSnapshotImport { source_snapshot_uid, target_index_uid }) => {
-            assert_eq!(source_snapshot_uid, "test");
+            assert_eq!(source_snapshot_uid, "test.snapshot.tar"); // Expect stem with extensions
             assert_eq!(target_index_uid, "imported_test");
         }
         _ => panic!("Expected Details::SingleIndexSnapshotImport"),
