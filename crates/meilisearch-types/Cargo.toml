@@ -80,31 +80,3 @@ turkish = ["milli/turkish"]
 # fixed version due to format breakages in v1.40
 insta = "=1.39.0"
 meili-snap = { path = "../meili-snap" }
-
-[features]
-# all specialized tokenizations
-all-tokenizations = ["milli/all-tokenizations"]
-
-# chinese specialized tokenization
-chinese = ["milli/chinese"]
-chinese-pinyin = ["milli/chinese-pinyin"]
-# hebrew specialized tokenization
-hebrew = ["milli/hebrew"]
-# japanese specialized tokenization
-japanese = ["milli/japanese"]
-# korean specialized tokenization
-korean = ["milli/korean"]
-# thai specialized tokenization
-thai = ["milli/thai"]
-# allow greek specialized tokenization
-greek = ["milli/greek"]
-# allow khmer specialized tokenization
-khmer = ["milli/khmer"]
-# allow vietnamese specialized tokenization
-vietnamese = ["milli/vietnamese"]
-# force swedish character recomposition
-swedish-recomposition = ["milli/swedish-recomposition"]
-# allow german tokenization
-german = ["milli/german"]
-# allow turkish normalization
-turkish = ["milli/turkish"]
