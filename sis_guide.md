@@ -36,10 +36,14 @@ This guide outlines the steps for implementing the core backend functionality, s
 *   **Isolation**: Add new code paths (enums, functions, modules) rather than modifying existing full snapshot logic.
 *   **Incremental Development & TDD**: Each step should result in testable backend functionality. Tests will initially involve manually constructing and registering tasks.
 *   **Clarity**: Define task payloads, snapshot format, and processing logic clearly.
-*   **Test Separation**: To easily distinguish custom tests for this feature from upstream Meilisearch tests (aiding maintainability and merging), use a dedicated feature flag:
-    *   **Define Feature**: Add a feature (e.g., `custom-sis`) to the `[features]` section of the `Cargo.toml` for each crate containing custom tests.
-    *   **Tag Tests**: Apply the `#[cfg(feature = "custom-sis")]` attribute to custom test modules (e.g., `#[cfg(feature = "custom-sis")] mod single_index_snapshot_tests { ... }`) or entire test files (`#![cfg(feature = "custom-sis")]` at the top).
-    *   **Run Custom Tests**: Use `cargo test --features custom-sis` to run only the tagged tests across the workspace or within a specific crate.
+*   **Test Separation**: To easily distinguish custom tests for this fork (`meilisearchfj`) from upstream Meilisearch tests (aiding maintainability and merging), use a two-level feature flag strategy:
+    *   **Define Features**: In the `Cargo.toml` for each crate containing custom tests, define:
+        *   A general feature flag: `msfj` (for all custom tests in this fork).
+        *   A specific feature flag for the functionality being tested, e.g., `msfj-sis` (for Single Index Snapshot tests).
+    *   **Tag Tests**: Apply the `#[cfg(all(feature = "msfj", feature = "msfj-sis"))]` attribute to custom test modules or entire test files related to the specific feature. Use `#[cfg(feature = "msfj")]` for tests applicable to multiple custom features or general fork behavior.
+    *   **Run Tests**:
+        *   Run *all* custom tests: `cargo test --features msfj`
+        *   Run only Single Index Snapshot tests: `cargo test --features msfj-sis`
 
 ### Implementation Steps:
 

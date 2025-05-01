@@ -427,7 +427,7 @@ fn test_task_queue_is_full() {
 }
 
 // Tests specifically for the Single Index Snapshot feature
-#[cfg(feature = "custom-sis")]
+#[cfg(feature = "msfj-sis")]
 mod single_index_snapshot {
     use super::*; // Bring parent module's imports into scope
 

@@ -46,7 +46,10 @@ ureq = "2.12.1"
 uuid = { version = "1.11.0", features = ["serde", "v4"] }
 
 [features]
-custom-sis = []
+# General flag for all custom tests in the meilisearchfj fork
+msfj = []
+# Specific flag for single-index snapshot tests
+msfj-sis = ["msfj"] # msfj-sis implies msfj
 
 [dev-dependencies]
 big_s = "1.0.2"
