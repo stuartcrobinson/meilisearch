@@ -294,6 +294,12 @@ fn snapshot_details(d: &Details) -> String {
         Details::UpgradeDatabase { from, to } => {
             format!("{{ from: {from:?}, to: {to:?} }}")
         }
+        Details::SingleIndexSnapshotCreation { snapshot_uid } => {
+            format!("{{ snapshot_uid: {snapshot_uid:?} }}")
+        }
+        Details::SingleIndexSnapshotImport { source_snapshot_uid, target_index_uid } => {
+            format!("{{ source_snapshot_uid: {source_snapshot_uid:?}, target_index_uid: {target_index_uid:?} }}")
+        }
     }
 }
 
