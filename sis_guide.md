@@ -94,7 +94,7 @@ This guide outlines the steps for implementing the core backend functionality, s
         *   **Call Core Logic**: Call the `create_index_snapshot` function (from Step 3) with the index handle and `snapshots_path`.
         *   **Finalize Task**: Based on the `Result` from the core logic: update the task status to `Succeeded` and store the returned `snapshot_uid` in `Details` on success, or update the task status to `Failed` and store the error on failure.
         *   **Release Lock**: Release the "currently updating" status via `IndexMapper::set_currently_updating_index(None)`.
-*   **Testing (TDD)**: Write integration tests: Manually enqueue a `SingleIndexSnapshotCreation` task. Run the scheduler's `tick()` method (or relevant parts). Verify the task's final status (`Succeeded`/`Failed`) and `details.snapshot_uid` (on success). The snapshot file integrity is already tested in Step 3. Test error handling (e.g., index not found).
+*   **Testing (TDD)**: Write integration tests: Manually enqueue a `SingleIndexSnapshotCreation` task. Run the scheduler's `tick()` method (or relevant parts). Verify the scheduler correctly calls the core `create_index_snapshot` function and handles its `Result` to update the task's final status (`Succeeded`/`Failed`) and `details.snapshot_uid` (on success). The snapshot file integrity itself is already tested in Step 3. Test error handling (e.g., index not found).
 
 ### 5. Implement Core Snapshot Import Logic (`IndexMapper` Method)
 
@@ -129,7 +129,7 @@ This guide outlines the steps for implementing the core backend functionality, s
         *   **Call Core Logic**: Call `IndexMapper::import_index_from_snapshot` (from Step 5).
         *   **Apply Settings**: On success from the core logic, use the returned `Index` handle and parsed metadata (`ParsedMetadata.settings`) to apply the settings to the newly imported index. This typically involves creating an `update::Settings` builder, populating it from the parsed settings, and executing it within a write transaction on the imported index.
         *   **Finalize Task**: Based on the `Result` from *both* the core logic and the settings application: update the task status to `Succeeded` only if both succeeded. If either fails, update the status to `Failed` and store the relevant error in `Details`.
-*   **Testing (TDD)**: Write integration tests: Place a valid snapshot file in `snapshots_path`. Enqueue an `SingleIndexSnapshotImport` task. Run `tick()`. Verify the task's final status. Check that the new index exists (via `IndexMapper` or API) and has the correct settings applied (check settings API or direct `milli::Index` methods). Test error handling during the settings application phase (ensure task fails correctly).
+*   **Testing (TDD)**: Write integration tests: Place a valid snapshot file in `snapshots_path`. Enqueue an `SingleIndexSnapshotImport` task. Run `tick()`. Verify the scheduler correctly calls the core `IndexMapper::import_index_from_snapshot` function, handles its `Result`, attempts settings application on success, and updates the task's final status based on the outcome of both steps. Check that the new index exists (via `IndexMapper` or API) and has the correct settings applied (check settings API or direct `milli::Index` methods). Test error handling during the settings application phase (ensure task fails correctly).
 
 ### 7. Add Progress Reporting (Optional Backend Part)
 
