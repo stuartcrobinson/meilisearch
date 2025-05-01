@@ -426,9 +426,13 @@ fn test_task_queue_is_full() {
     handle.advance_one_failed_batch();
 }
 
-#[test]
-fn register_single_index_snapshot_creation() {
-    let (index_scheduler, mut _handle) = IndexScheduler::test(true, vec![]);
+// Tests specifically for the Single Index Snapshot feature
+mod single_index_snapshot {
+    use super::*; // Bring parent module's imports into scope
+
+    #[test]
+    fn register_single_index_snapshot_creation() {
+        let (index_scheduler, mut _handle) = IndexScheduler::test(true, vec![]);
 
     let kind = KindWithContent::SingleIndexSnapshotCreation { index_uid: S("catto") };
     let task = index_scheduler.register(kind.clone(), None, false).unwrap();
@@ -497,5 +501,6 @@ fn register_single_index_snapshot_import() {
     }
     "###);
 
-    snapshot!(snapshot_index_scheduler(&index_scheduler), name: "single_index_snapshot_import_registered");
+        snapshot!(snapshot_index_scheduler(&index_scheduler), name: "single_index_snapshot_import_registered");
+    }
 }
