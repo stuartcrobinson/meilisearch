@@ -303,6 +303,8 @@ pub(crate) fn filter_out_references_to_newer_tasks(task: &mut Task) {
             tasks.remove_range(task.uid..);
             tasks.len()
         }
+        KindWithContent::SingleIndexSnapshotCreation { .. }
+        | KindWithContent::SingleIndexSnapshotImport { .. } => return, // These tasks don't reference other tasks
         _ => return,
     };
     if let Some(

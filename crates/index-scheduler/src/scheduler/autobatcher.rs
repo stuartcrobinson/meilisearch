@@ -72,7 +72,9 @@ impl From<KindWithContent> for AutobatchKind {
             | KindWithContent::TaskDeletion { .. }
             | KindWithContent::DumpCreation { .. }
             | KindWithContent::UpgradeDatabase { .. }
-            | KindWithContent::SnapshotCreation => {
+            | KindWithContent::SnapshotCreation
+            | KindWithContent::SingleIndexSnapshotCreation { .. }
+            | KindWithContent::SingleIndexSnapshotImport { .. } => {
                 panic!("The autobatcher should never be called with tasks that don't apply to an index.")
             }
         }
