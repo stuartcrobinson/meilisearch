@@ -51,7 +51,8 @@ impl Task {
             | TaskCancelation { .. }
             | TaskDeletion { .. }
             | UpgradeDatabase { .. }
-            | IndexSwap { .. } => None,
+            | IndexSwap { .. }
+            | SingleIndexSnapshotImport { .. } => None,
             DocumentAdditionOrUpdate { index_uid, .. }
             | DocumentEdition { index_uid, .. }
             | DocumentDeletion { index_uid, .. }
@@ -60,7 +61,8 @@ impl Task {
             | SettingsUpdate { index_uid, .. }
             | IndexCreation { index_uid, .. }
             | IndexUpdate { index_uid, .. }
-            | IndexDeletion { index_uid } => Some(index_uid),
+            | IndexDeletion { index_uid }
+            | SingleIndexSnapshotCreation { index_uid } => Some(index_uid),
         }
     }
 
@@ -572,13 +574,15 @@ impl Kind {
             | Kind::SettingsUpdate
             | Kind::IndexCreation
             | Kind::IndexDeletion
-            | Kind::IndexUpdate => true,
+            | Kind::IndexUpdate
+            | Kind::SingleIndexSnapshotCreation => true,
             Kind::IndexSwap
             | Kind::TaskCancelation
             | Kind::TaskDeletion
             | Kind::DumpCreation
             | Kind::UpgradeDatabase
-            | Kind::SnapshotCreation => false,
+            | Kind::SnapshotCreation
+            | Kind::SingleIndexSnapshotImport => false,
         }
     }
 }

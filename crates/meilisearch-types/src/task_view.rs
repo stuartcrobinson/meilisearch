@@ -332,6 +332,23 @@ impl From<Details> for DetailsView {
                 upgrade_to: Some(format!("v{}.{}.{}", to.0, to.1, to.2)),
                 ..Default::default()
             },
+            Details::SingleIndexSnapshotCreation { snapshot_uid } => {
+                // TODO: Decide how to represent this in the view. For now, just include the UID.
+                // Maybe add a dedicated field `snapshot_uid` to DetailsView?
+                DetailsView { dump_uid: Some(snapshot_uid), ..Default::default() }
+            }
+            Details::SingleIndexSnapshotImport { source_snapshot_uid, target_index_uid } => {
+                // TODO: Decide how to represent this in the view.
+                // Maybe add dedicated fields `source_snapshot_uid` and `target_index_uid`?
+                // For now, using existing fields somewhat awkwardly.
+                DetailsView {
+                    original_filter: Some(Some(format!(
+                        "Importing snapshot {} into index {}",
+                        source_snapshot_uid, target_index_uid
+                    ))),
+                    ..Default::default()
+                }
+            }
         }
     }
 }
