@@ -63,6 +63,7 @@ impl Task {
             | IndexDeletion { index_uid }
             | SingleIndexSnapshotCreation { index_uid } => Some(index_uid),
             | SingleIndexSnapshotImport { target_index_uid, .. } => Some(target_index_uid),
+            | SingleIndexSnapshotImport { target_index_uid, .. } => Some(target_index_uid),
         }
     }
 
