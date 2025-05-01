@@ -275,6 +275,8 @@ pub fn swap_index_uid_in_task(task: &mut Task, swap: (&str, &str)) {
         | K::DumpCreation { .. }
         | K::UpgradeDatabase { .. }
         | K::SnapshotCreation => (),
+        K::SingleIndexSnapshotCreation { index_uid } => index_uids.push(index_uid),
+        K::SingleIndexSnapshotImport { target_index_uid, .. } => index_uids.push(target_index_uid),
     };
     if let Some(Details::IndexSwap { swaps }) = &mut task.details {
         for IndexSwap { indexes: (lhs, rhs) } in swaps.iter_mut() {
