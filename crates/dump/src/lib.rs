@@ -216,6 +216,14 @@ impl From<KindWithContent> for KindDump {
             KindWithContent::UpgradeDatabase { from: version } => {
                 KindDump::UpgradeDatabase { from: version }
             }
+            // These task kinds are specific to the single-index snapshot feature
+            // and should not be part of a full instance dump.
+            KindWithContent::SingleIndexSnapshotCreation { .. } => {
+                unreachable!("SingleIndexSnapshotCreation tasks should not be part of a full dump")
+            }
+            KindWithContent::SingleIndexSnapshotImport { .. } => {
+                unreachable!("SingleIndexSnapshotImport tasks should not be part of a full dump")
+            }
         }
     }
 }
