@@ -155,6 +155,13 @@ pub enum KindWithContent {
     UpgradeDatabase {
         from: (u32, u32, u32),
     },
+    SingleIndexSnapshotCreation {
+        index_uid: String,
+    },
+    SingleIndexSnapshotImport {
+        source_snapshot_path: String,
+        target_index_uid: String,
+    },
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
@@ -181,6 +188,8 @@ impl KindWithContent {
             KindWithContent::DumpCreation { .. } => Kind::DumpCreation,
             KindWithContent::SnapshotCreation => Kind::SnapshotCreation,
             KindWithContent::UpgradeDatabase { .. } => Kind::UpgradeDatabase,
+            KindWithContent::SingleIndexSnapshotCreation { .. } => Kind::SingleIndexSnapshotCreation,
+            KindWithContent::SingleIndexSnapshotImport { .. } => Kind::SingleIndexSnapshotImport,
         }
     }
 
@@ -192,7 +201,8 @@ impl KindWithContent {
             | SnapshotCreation
             | TaskCancelation { .. }
             | TaskDeletion { .. }
-            | UpgradeDatabase { .. } => vec![],
+            | UpgradeDatabase { .. }
+            | SingleIndexSnapshotImport { .. } => vec![],
             DocumentAdditionOrUpdate { index_uid, .. }
             | DocumentEdition { index_uid, .. }
             | DocumentDeletion { index_uid, .. }
@@ -201,7 +211,8 @@ impl KindWithContent {
             | SettingsUpdate { index_uid, .. }
             | IndexCreation { index_uid, .. }
             | IndexUpdate { index_uid, .. }
-            | IndexDeletion { index_uid } => vec![index_uid],
+            | IndexDeletion { index_uid }
+            | SingleIndexSnapshotCreation { index_uid } => vec![index_uid],
             IndexSwap { swaps } => {
                 let mut indexes = HashSet::<&str>::default();
                 for swap in swaps {
@@ -268,7 +279,7 @@ impl KindWithContent {
                 original_filter: query.clone(),
             }),
             KindWithContent::DumpCreation { .. } => Some(Details::Dump { dump_uid: None }),
-            KindWithContent::SnapshotCreation => None,
+            KindWithContent::SnapshotCreation => None, // Full instance snapshot has no details
             KindWithContent::UpgradeDatabase { from } => Some(Details::UpgradeDatabase {
                 from: (from.0, from.1, from.2),
                 to: (
@@ -276,6 +287,22 @@ impl KindWithContent {
                     versioning::VERSION_MINOR.parse().unwrap(),
                     versioning::VERSION_PATCH.parse().unwrap(),
                 ),
+            }),
+            KindWithContent::SingleIndexSnapshotCreation { .. } => {
+                Some(Details::SingleIndexSnapshotCreation { snapshot_uid: None })
+            }
+            KindWithContent::SingleIndexSnapshotImport {
+                source_snapshot_path,
+                target_index_uid,
+            } => Some(Details::SingleIndexSnapshotImport {
+                // Extract UID from path if possible, otherwise use the full path
+                source_snapshot_uid: std::path::Path::new(source_snapshot_path)
+                    .file_stem()
+                    .and_then(|s| s.to_str())
+                    .map(|s| s.split_once('-').map(|(_, uid)| uid).unwrap_or(s))
+                    .unwrap_or(source_snapshot_path)
+                    .to_string(),
+                target_index_uid: target_index_uid.clone(),
             }),
         }
     }
@@ -334,7 +361,7 @@ impl KindWithContent {
                 original_filter: query.clone(),
             }),
             KindWithContent::DumpCreation { .. } => Some(Details::Dump { dump_uid: None }),
-            KindWithContent::SnapshotCreation => None,
+            KindWithContent::SnapshotCreation => None, // Full instance snapshot has no details
             KindWithContent::UpgradeDatabase { from } => Some(Details::UpgradeDatabase {
                 from: *from,
                 to: (
@@ -342,6 +369,22 @@ impl KindWithContent {
                     versioning::VERSION_MINOR.parse().unwrap(),
                     versioning::VERSION_PATCH.parse().unwrap(),
                 ),
+            }),
+            KindWithContent::SingleIndexSnapshotCreation { .. } => {
+                Some(Details::SingleIndexSnapshotCreation { snapshot_uid: None })
+            }
+            KindWithContent::SingleIndexSnapshotImport {
+                source_snapshot_path,
+                target_index_uid,
+            } => Some(Details::SingleIndexSnapshotImport {
+                // Extract UID from path if possible, otherwise use the full path
+                source_snapshot_uid: std::path::Path::new(source_snapshot_path)
+                    .file_stem()
+                    .and_then(|s| s.to_str())
+                    .map(|s| s.split_once('-').map(|(_, uid)| uid).unwrap_or(s))
+                    .unwrap_or(source_snapshot_path)
+                    .to_string(),
+                target_index_uid: target_index_uid.clone(),
             }),
         }
     }
@@ -382,7 +425,7 @@ impl From<&KindWithContent> for Option<Details> {
                 original_filter: query.clone(),
             }),
             KindWithContent::DumpCreation { .. } => Some(Details::Dump { dump_uid: None }),
-            KindWithContent::SnapshotCreation => None,
+            KindWithContent::SnapshotCreation => None, // Full instance snapshot has no details
             KindWithContent::UpgradeDatabase { from } => Some(Details::UpgradeDatabase {
                 from: *from,
                 to: (
@@ -390,6 +433,22 @@ impl From<&KindWithContent> for Option<Details> {
                     versioning::VERSION_MINOR.parse().unwrap(),
                     versioning::VERSION_PATCH.parse().unwrap(),
                 ),
+            }),
+            KindWithContent::SingleIndexSnapshotCreation { .. } => {
+                Some(Details::SingleIndexSnapshotCreation { snapshot_uid: None })
+            }
+            KindWithContent::SingleIndexSnapshotImport {
+                source_snapshot_path,
+                target_index_uid,
+            } => Some(Details::SingleIndexSnapshotImport {
+                // Extract UID from path if possible, otherwise use the full path
+                source_snapshot_uid: std::path::Path::new(source_snapshot_path)
+                    .file_stem()
+                    .and_then(|s| s.to_str())
+                    .map(|s| s.split_once('-').map(|(_, uid)| uid).unwrap_or(s))
+                    .unwrap_or(source_snapshot_path)
+                    .to_string(),
+                target_index_uid: target_index_uid.clone(),
             }),
         }
     }
@@ -500,6 +559,8 @@ pub enum Kind {
     DumpCreation,
     SnapshotCreation,
     UpgradeDatabase,
+    SingleIndexSnapshotCreation,
+    SingleIndexSnapshotImport,
 }
 
 impl Kind {
@@ -537,6 +598,8 @@ impl Display for Kind {
             Kind::DumpCreation => write!(f, "dumpCreation"),
             Kind::SnapshotCreation => write!(f, "snapshotCreation"),
             Kind::UpgradeDatabase => write!(f, "upgradeDatabase"),
+            Kind::SingleIndexSnapshotCreation => write!(f, "singleIndexSnapshotCreation"),
+            Kind::SingleIndexSnapshotImport => write!(f, "singleIndexSnapshotImport"),
         }
     }
 }
@@ -570,6 +633,10 @@ impl FromStr for Kind {
             Ok(Kind::SnapshotCreation)
         } else if kind.eq_ignore_ascii_case("upgradeDatabase") {
             Ok(Kind::UpgradeDatabase)
+        } else if kind.eq_ignore_ascii_case("singleIndexSnapshotCreation") {
+            Ok(Kind::SingleIndexSnapshotCreation)
+        } else if kind.eq_ignore_ascii_case("singleIndexSnapshotImport") {
+            Ok(Kind::SingleIndexSnapshotImport)
         } else {
             Err(ParseTaskKindError(kind.to_owned()))
         }
@@ -647,6 +714,13 @@ pub enum Details {
         from: (u32, u32, u32),
         to: (u32, u32, u32),
     },
+    SingleIndexSnapshotCreation {
+        snapshot_uid: Option<String>,
+    },
+    SingleIndexSnapshotImport {
+        source_snapshot_uid: String,
+        target_index_uid: String,
+    },
 }
 
 impl Details {
@@ -668,7 +742,9 @@ impl Details {
             | Self::IndexInfo { .. }
             | Self::Dump { .. }
             | Self::UpgradeDatabase { .. }
-            | Self::IndexSwap { .. } => (),
+            | Self::IndexSwap { .. }
+            | Self::SingleIndexSnapshotCreation { .. }
+            | Self::SingleIndexSnapshotImport { .. } => (),
         }
 
         details
