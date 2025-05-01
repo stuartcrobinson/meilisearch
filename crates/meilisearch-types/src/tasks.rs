@@ -981,7 +981,7 @@ mod tests {
 
     // Tests specifically for the Single Index Snapshot feature
     #[cfg(feature = "msfj-sis")]
-    mod single_index_snapshot {
+    mod msfj_sis_tests { // Renamed module
         use super::*; // Bring parent module's imports into scope
         use crate::tasks::KindWithContent;
 
