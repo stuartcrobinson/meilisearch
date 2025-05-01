@@ -59,9 +59,9 @@ This guide outlines the steps for implementing the core backend functionality, s
     *   Verify that `filter_out_references_to_newer_tasks` and `check_index_swap_validity` don't negatively interact.
 *   **Testing (TDD)**: Write integration tests (within the `index-scheduler` crate) that manually construct `KindWithContent` for the new types, call `queue.register`, and verify that tasks with the correct kind, payload, and initial status (`enqueued`) are persisted in the task database.
 
-### 3. Define Snapshot Format and Implement Creation Logic
+### 3. Implement Core Snapshot Creation Logic
 
-*   **Files**: `crates/index-scheduler/src/scheduler.rs`, potentially new helper modules/functions within `index-scheduler`.
+*   **Files**: Potentially new helper module/functions (e.g., `crates/index-scheduler/src/snapshot_utils.rs` or similar).
 *   **Action**:
     *   **Define Format**: Specify the snapshot format. Recommendation: A gzipped tarball (`.snapshot.tar.gz`) containing:
         *   `data.mdb`: The LMDB data file for the index.
@@ -72,37 +72,40 @@ This guide outlines the steps for implementing the core backend functionality, s
         *   **Search Tuning**: `rankingRules`, `stopWords`, `synonyms`, `typoTolerance`.
         *   **Other Settings**: `pagination`, `faceting`, `embedders`.
         *   **Timestamps**: Consider including index creation/update timestamps if needed for `Index::new_with_creation_dates`.
-    *   **Implement Creation**:
-        *   Modify the main task processing logic in `scheduler.rs` (likely `IndexScheduler::process_batch` or a called function) to recognize `KindWithContent::SingleIndexSnapshotCreation`.
-        *   Create a new, isolated function (e.g., `process_single_index_snapshot_creation`) to handle this task type.
+    *   **Implement Core Function**: Create a new, isolated function (e.g., `create_index_snapshot(index: &Index, snapshots_path: &Path) -> Result<String>`).
         *   Inside this function:
-            *   Retrieve `index_uid`.
-            *   Use `IndexMapper` to get the index's internal UUID and path.
-            *   **Ensure Exclusive Scheduling**: Mark the index as "currently updating" via `IndexMapper::set_currently_updating_index` to block other write tasks on this index.
             *   **Read Settings**: Acquire an `RoTxn` on the target `Index` and read all necessary settings. Release the `RoTxn`.
-            *   **Copy Data**: Call `Index::copy_to_path(...)` to copy `data.mdb` (this uses its own internal `RoTxn`). The data state will be consistent with the settings read previously due to the scheduler-level exclusion.
+            *   **Copy Data**: Call `Index::copy_to_path(...)` to copy `data.mdb` to a temporary location.
             *   **Package**: Generate `metadata.json` (including current Meilisearch version), create the tarball with the copied `data.mdb` and `metadata.json`.
             *   **Store**: Generate a unique snapshot identifier (`snapshot_uid`, e.g., based on timestamp/UUID). Create the snapshot filename incorporating this UID (e.g., `{index_uid}-{snapshot_uid}.snapshot.tar.gz`). Move the final snapshot tarball to the configured `snapshots_path`.
-            *   **Finalize Task**: Update the task status (`Succeeded`/`Failed`) and `Details` (using the generated `snapshot_uid`).
-            *   **Release Lock**: Release the "currently updating" status via `IndexMapper::set_currently_updating_index(None)`.
-*   **Testing (TDD)**: Write integration tests: Manually enqueue a `SingleIndexSnapshotCreation` task. Run the scheduler's `tick()` method (or relevant parts). Verify the snapshot file (`.snapshot.tar.gz`) is created correctly in `snapshots_path` with the expected naming convention. Unpack and verify `metadata.json` (including version) and `data.mdb`. Check task status and `details.snapshot_uid`. Test error handling.
+            *   Return the generated `snapshot_uid`.
+*   **Testing (TDD)**: Write unit/integration tests calling the `create_index_snapshot` function directly with a test index handle and path. Verify the snapshot file (`.snapshot.tar.gz`) is created correctly in the specified path with the expected naming convention. Unpack and verify `metadata.json` (including version) and `data.mdb`. Check that the correct `snapshot_uid` is returned. Test error handling (e.g., I/O errors).
 
-### 4. Implement Single Index Snapshot Import Logic
+### 4. Integrate Snapshot Creation into Scheduler
 
-*   **Files**: `crates/index-scheduler/src/scheduler.rs`, `crates/index-scheduler/src/index_mapper/mod.rs`, `crates/index-scheduler/src/index_mapper/index_map.rs`, potentially new helpers.
+*   **Files**: `crates/index-scheduler/src/scheduler.rs`, `crates/index-scheduler/src/scheduler/process_batch.rs`.
 *   **Action**:
-    *   Modify the task processing logic to recognize `KindWithContent::SingleIndexSnapshotImport`.
-    *   Create a new, isolated function (e.g., `process_single_index_snapshot_import`).
-    *   **Add Dedicated `IndexMapper` Method**: Implement a new method like `IndexMapper::import_index_from_snapshot(target_index_uid: &str, snapshot_path: &Path) -> Result<Index>` to encapsulate the core import logic. This method will *not* reuse `IndexMapper::create_index`.
-    *   **Inside `process_single_index_snapshot_import`**:
-        *   Retrieve `source_snapshot_path` and `target_index_uid`.
-        *   Call the new `IndexMapper::import_index_from_snapshot` method.
-        *   Handle the result, update task status (`Succeeded`/`Failed`) and Details.
+    *   Modify the main task processing logic (likely `IndexScheduler::process_batch` or a called function like `process_index_operation`) to recognize `KindWithContent::SingleIndexSnapshotCreation`.
+    *   Create a new, isolated function (e.g., `process_single_index_snapshot_creation`) within the scheduler module to handle this task type.
+    *   Inside this function:
+        *   Retrieve `index_uid`.
+        *   Use `IndexMapper` to get the `Index` handle.
+        *   **Ensure Exclusive Scheduling**: Mark the index as "currently updating" via `IndexMapper::set_currently_updating_index` to block other write tasks on this index.
+        *   **Call Core Logic**: Call the `create_index_snapshot` function (from Step 3) with the index handle and `snapshots_path`.
+        *   **Finalize Task**: Based on the `Result` from the core logic, update the task status (`Succeeded`/`Failed`) and `Details` (storing the returned `snapshot_uid` on success, or the error).
+        *   **Release Lock**: Release the "currently updating" status via `IndexMapper::set_currently_updating_index(None)`.
+*   **Testing (TDD)**: Write integration tests: Manually enqueue a `SingleIndexSnapshotCreation` task. Run the scheduler's `tick()` method (or relevant parts). Verify the task's final status (`Succeeded`/`Failed`) and `details.snapshot_uid` (on success). The snapshot file integrity is already tested in Step 3. Test error handling (e.g., index not found).
+
+### 5. Implement Core Snapshot Import Logic (`IndexMapper` Method)
+
+*   **Files**: `crates/index-scheduler/src/index_mapper/mod.rs`, `crates/index-scheduler/src/index_mapper/index_map.rs`.
+*   **Action**:
+    *   **Add Dedicated `IndexMapper` Method**: Implement a new method `IndexMapper::import_index_from_snapshot(target_index_uid: &str, snapshot_path: &Path) -> Result<(Index, ParsedMetadata)>` (or similar signature, returning parsed metadata might be useful for Step 6). This method will *not* reuse `IndexMapper::create_index`.
     *   **Inside `IndexMapper::import_index_from_snapshot`**:
-        *   **4a. Validate Request & Path**: Perform security check on `source_snapshot_path` (must be within `snapshots_path`). Check if `target_index_uid` already exists using `self.index_exists`; fail if it does.
-        *   **4b. Unpack & Validate Snapshot**: Untar snapshot (e.g., to temp dir). Verify `data.mdb` and `metadata.json`. Parse `metadata.json`. Perform **Version Check**: Compare `major` and `minor` version from metadata against the current instance version. Fail with `SnapshotVersionMismatch` if they don't match (allow patch differences).
-        *   **4c. Prepare Index Directory & Data**: Generate a new internal UUID. Create `indexes/{new_uuid}/`. Move unpacked `data.mdb` into this directory.
-        *   **4d. Register, Open, and Map Index**:
+        *   **Validate Request & Path**: Perform security check on `snapshot_path` (must be within `snapshots_path`). Check if `target_index_uid` already exists using `self.index_exists`; fail if it does.
+        *   **Unpack & Validate Snapshot**: Untar snapshot (e.g., to temp dir). Verify `data.mdb` and `metadata.json`. Parse `metadata.json`. Perform **Version Check**: Compare `major` and `minor` version from metadata against the current instance version. Fail with `SnapshotVersionMismatch` if they don't match (allow patch differences). Store parsed metadata.
+        *   **Prepare Index Directory & Data**: Generate a new internal UUID. Create `indexes/{new_uuid}/`. Move unpacked `data.mdb` into this directory.
+        *   **Register, Open, and Map Index**:
             *   Call `milli::Index::new_with_creation_dates(..., creation: false)` on the prepared directory using dates from metadata if available.
             *   Acquire `RwTxn` for the main scheduler env (`self.env`).
             *   Acquire write lock on `self.index_map`.
@@ -111,18 +114,30 @@ This guide outlines the steps for implementing the core backend functionality, s
             *   Handle potential eviction: `if let InsertionOutcome::Evicted(evicted_uuid, evicted_index) = outcome { self.index_map.close(evicted_uuid, evicted_index, self.enable_mdb_writemap, 0); }`.
             *   Release `self.index_map` write lock.
             *   Commit `RwTxn`.
-            *   Return the opened `Index`.
-        *   **4e. Apply Settings**: (This should happen *after* the index is successfully registered and opened, likely back in `process_single_index_snapshot_import`). Use the parsed metadata to configure the newly opened index via `update::Settings`.
-        *   **4f. Cleanup**: Clean up temporary unpack directory.
-*   **Testing (TDD)**: Write integration tests: Place a valid snapshot file in `snapshots_path`. Enqueue an `SingleIndexSnapshotImport` task. Run `tick()`. Verify the new index exists via `IndexMapper`, on disk, has correct data (search test) and settings (API/direct check). Check task status. **Specifically test the scenario where importing causes an LRU eviction to ensure `IndexMap::close` is handled correctly.** Test errors (invalid path, target exists, bad format, version mismatch, I/O).
+        *   **Cleanup**: Clean up temporary unpack directory (on success or failure after unpacking).
+        *   Return the opened `Index` and the parsed metadata.
+*   **Testing (TDD)**: Write integration tests calling the `IndexMapper::import_index_from_snapshot` method directly with a prepared snapshot file and target UID. Verify the index directory is created, `data.mdb` is present, the mapping exists in `index_mapping`, the `Index` object is returned, and the `IndexMap` contains the new index. **Specifically test the scenario where importing causes an LRU eviction to ensure `IndexMap::close` is handled correctly.** Test errors (invalid path, target exists, bad format, version mismatch, I/O).
 
-### 5. Add Progress Reporting (Optional Backend Part)
+### 6. Integrate Snapshot Import into Scheduler
+
+*   **Files**: `crates/index-scheduler/src/scheduler.rs`, `crates/index-scheduler/src/scheduler/process_batch.rs`.
+*   **Action**:
+    *   Modify the task processing logic to recognize `KindWithContent::SingleIndexSnapshotImport`.
+    *   Create a new, isolated function (e.g., `process_single_index_snapshot_import`) within the scheduler module.
+    *   **Inside `process_single_index_snapshot_import`**:
+        *   Retrieve `source_snapshot_path` and `target_index_uid` from the task payload.
+        *   **Call Core Logic**: Call `IndexMapper::import_index_from_snapshot` (from Step 5).
+        *   **Apply Settings**: On success, use the returned `Index` handle and parsed metadata to apply the settings to the newly imported index (e.g., using `update::Settings` or similar mechanism). This might require a write transaction on the imported index.
+        *   **Finalize Task**: Based on the `Result` from the core logic and settings application, update the task status (`Succeeded`/`Failed`) and `Details`.
+*   **Testing (TDD)**: Write integration tests: Place a valid snapshot file in `snapshots_path`. Enqueue an `SingleIndexSnapshotImport` task. Run `tick()`. Verify the task's final status. Check that the new index exists (via `IndexMapper` or API) and has the correct settings applied (check settings API or direct `milli::Index` methods). Test error handling during the settings application phase.
+
+### 7. Add Progress Reporting (Optional Backend Part)
 
 *   **File**: `crates/index-scheduler/src/processing.rs`
 *   **Action**:
     *   Define new enum variants for progress steps (e.g., `ValidatingSnapshot`, `CopyingIndexData`, `PackagingSnapshot`, `UnpackingSnapshot`, `ApplyingSettings`).
-    *   Update the processing functions (from steps 3 & 4) to report progress via the `Progress` object.
-*   **Testing (TDD)**: Enhance tests from steps 3 & 4 to check the `details` field of completed tasks for expected progress steps.
+    *   Update the processing functions (from steps 4 & 6) to report progress via the `Progress` object.
+*   **Testing (TDD)**: Enhance tests from steps 4 & 6 to check the `details` field of completed tasks for expected progress steps.
 
 ## 4. Error Handling Guide
 
