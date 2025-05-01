@@ -12,16 +12,20 @@ A key consideration during implementation is to minimize potential merge conflic
 
 The following files have been identified as relevant to this feature and are considered part of the working context:
 
+*   `crates/index-scheduler/src/error.rs`
 *   `crates/index-scheduler/src/index_mapper/index_map.rs`
+*   `crates/index-scheduler/src/index_mapper/mod.rs`
 *   `crates/index-scheduler/src/lib.rs`
+*   `crates/index-scheduler/src/processing.rs`
+*   `crates/index-scheduler/src/queue/mod.rs`
+*   `crates/index-scheduler/src/scheduler/mod.rs`
+*   `crates/index-scheduler/src/scheduler/process_batch.rs`
+*   `crates/index-scheduler/src/upgrade/mod.rs`
+*   `crates/index-scheduler/src/versioning.rs`
 *   `crates/meilisearch-types/src/tasks.rs`
 *   `crates/meilisearch/src/routes/mod.rs`
 *   `crates/meilisearch/src/routes/snapshot.rs`
 *   `crates/milli/src/index.rs`
-*   `crates/index-scheduler/src/scheduler/mod.rs`
-*   `crates/index-scheduler/src/index_mapper/mod.rs`
-*   `crates/index-scheduler/src/processing.rs`
-*   `crates/index-scheduler/src/queue/mod.rs`
 
 ## 3. High-Level Implementation Guide (Backend Focus)
 
