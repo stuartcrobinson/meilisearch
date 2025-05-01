@@ -92,7 +92,7 @@ This guide outlines the steps for implementing the core backend functionality, s
         *   Use `IndexMapper` to get the `Index` handle.
         *   **Ensure Exclusive Scheduling**: Mark the index as "currently updating" via `IndexMapper::set_currently_updating_index` to block other write tasks on this index.
         *   **Call Core Logic**: Call the `create_index_snapshot` function (from Step 3) with the index handle and `snapshots_path`.
-        *   **Finalize Task**: Based on the `Result` from the core logic, update the task status (`Succeeded`/`Failed`) and `Details` (storing the returned `snapshot_uid` on success, or the error).
+        *   **Finalize Task**: Based on the `Result` from the core logic: update the task status to `Succeeded` and store the returned `snapshot_uid` in `Details` on success, or update the task status to `Failed` and store the error on failure.
         *   **Release Lock**: Release the "currently updating" status via `IndexMapper::set_currently_updating_index(None)`.
 *   **Testing (TDD)**: Write integration tests: Manually enqueue a `SingleIndexSnapshotCreation` task. Run the scheduler's `tick()` method (or relevant parts). Verify the task's final status (`Succeeded`/`Failed`) and `details.snapshot_uid` (on success). The snapshot file integrity is already tested in Step 3. Test error handling (e.g., index not found).
 
@@ -114,9 +114,9 @@ This guide outlines the steps for implementing the core backend functionality, s
             *   Handle potential eviction: `if let InsertionOutcome::Evicted(evicted_uuid, evicted_index) = outcome { self.index_map.close(evicted_uuid, evicted_index, self.enable_mdb_writemap, 0); }`.
             *   Release `self.index_map` write lock.
             *   Commit `RwTxn`.
-        *   **Cleanup**: Clean up temporary unpack directory (on success or failure after unpacking).
+        *   **Cleanup**: Ensure the temporary unpack directory is reliably cleaned up (e.g., using `defer` or RAII pattern if applicable, or explicit cleanup in error paths) after unpacking.
         *   Return the opened `Index` and the parsed metadata.
-*   **Testing (TDD)**: Write integration tests calling the `IndexMapper::import_index_from_snapshot` method directly with a prepared snapshot file and target UID. Verify the index directory is created, `data.mdb` is present, the mapping exists in `index_mapping`, the `Index` object is returned, and the `IndexMap` contains the new index. **Specifically test the scenario where importing causes an LRU eviction to ensure `IndexMap::close` is handled correctly.** Test errors (invalid path, target exists, bad format, version mismatch, I/O).
+*   **Testing (TDD)**: Write integration tests calling the `IndexMapper::import_index_from_snapshot` method directly with a prepared snapshot file and target UID. Verify the index directory is created, `data.mdb` is present, the mapping exists in `index_mapping`, the `Index` object is returned, and the `IndexMap` contains the new index. **Specifically test the scenario where importing causes an LRU eviction to ensure `IndexMap::close` is handled correctly.** Test errors (invalid path, target exists, bad format, version mismatch, I/O). Verify temporary directory cleanup on success and failure.
 
 ### 6. Integrate Snapshot Import into Scheduler
 
