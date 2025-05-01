@@ -73,7 +73,7 @@ This guide outlines the steps for implementing the core backend functionality, s
         *   **Other Settings**: `pagination`, `faceting`, `embedders`.
         *   **Timestamps**: Consider including index creation/update timestamps if needed for `Index::new_with_creation_dates`.
     *   **Implement Core Function**: Create a new, isolated function (e.g., `create_index_snapshot(index: &Index, snapshots_path: &Path) -> Result<String>`).
-        *   Inside this function:
+        *   Inside this function (assumes caller ensures `index` state consistency, e.g., via scheduler lock):
             *   **Read Settings**: Acquire an `RoTxn` on the target `Index` and read all necessary settings. Release the `RoTxn`.
             *   **Copy Data**: Call `Index::copy_to_path(...)` to copy `data.mdb` to a temporary location.
             *   **Package**: Generate `metadata.json` (including current Meilisearch version), create the tarball with the copied `data.mdb` and `metadata.json`.
