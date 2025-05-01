@@ -71,10 +71,10 @@ This guide outlines the steps for implementing the core backend functionality, s
         *   **Attribute Settings**: `displayedAttributes`, `searchableAttributes` (user-defined), `filterableAttributes`, `sortableAttributes`.
         *   **Search Tuning**: `rankingRules`, `stopWords`, `synonyms`, `typoTolerance`.
         *   **Other Settings**: `pagination`, `faceting`, `embedders`.
-        *   **Timestamps**: Consider including index creation/update timestamps if needed for `Index::new_with_creation_dates`.
+        *   **Timestamps**: Include `createdAt` and `updatedAt` timestamps (read from the source index).
     *   **Implement Core Function**: Create a new, isolated function (e.g., `create_index_snapshot(index: &Index, snapshots_path: &Path) -> Result<String>`).
         *   Inside this function (assumes caller ensures `index` state consistency, e.g., via scheduler lock):
-            *   **Read Settings**: Acquire an `RoTxn` on the target `Index` and read all necessary settings. Release the `RoTxn`.
+            *   **Read Settings & Timestamps**: Acquire an `RoTxn` on the target `Index` and read all necessary settings, including `created_at` and `updated_at`. Release the `RoTxn`.
             *   **Copy Data**: Call `Index::copy_to_path(...)` to copy `data.mdb` to a temporary location.
             *   **Package**: Generate `metadata.json` (including current Meilisearch version), create the tarball with the copied `data.mdb` and `metadata.json`.
             *   **Store**: Generate a unique snapshot identifier (`snapshot_uid`, e.g., based on timestamp/UUID). Create the snapshot filename incorporating this UID (e.g., `{index_uid}-{snapshot_uid}.snapshot.tar.gz`). Move the final snapshot tarball to the configured `snapshots_path`.
@@ -106,7 +106,7 @@ This guide outlines the steps for implementing the core backend functionality, s
         *   **Unpack & Validate Snapshot**: Untar snapshot to a temporary directory (Recommendation: create this temp directory *within* the main Meilisearch data path, e.g., `data.ms/tmp_snapshot_import_{uuid}/`, to ensure same filesystem). Verify `data.mdb` and `metadata.json`. Parse `metadata.json`. Perform **Version Check**: Compare `major` and `minor` version from metadata against the current instance version. Fail with `SnapshotVersionMismatch` if they don't match (allow patch differences). Store parsed metadata.
         *   **Prepare Index Directory & Data**: Generate a new internal UUID. Create `indexes/{new_uuid}/`. Move unpacked `data.mdb` from the temporary directory into this new directory.
         *   **Register, Open, and Map Index**:
-            *   Call `milli::Index::new_with_creation_dates(..., creation: false)` on the prepared directory using dates from metadata if available.
+            *   Call `milli::Index::new_with_creation_dates(..., creation: false)` on the prepared directory, passing the `createdAt` and `updatedAt` timestamps read from the snapshot's metadata.
             *   Acquire `RwTxn` for the main scheduler env (`self.env`).
             *   Acquire write lock on `self.index_map`.
             *   Update `self.index_mapping` (`target_index_uid` -> `new_uuid`).
