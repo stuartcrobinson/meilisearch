@@ -51,8 +51,7 @@ impl Task {
             | TaskCancelation { .. }
             | TaskDeletion { .. }
             | UpgradeDatabase { .. }
-            | IndexSwap { .. }
-            | SingleIndexSnapshotImport { .. } => None,
+            | IndexSwap { .. } => None,
             DocumentAdditionOrUpdate { index_uid, .. }
             | DocumentEdition { index_uid, .. }
             | DocumentDeletion { index_uid, .. }
@@ -63,6 +62,7 @@ impl Task {
             | IndexUpdate { index_uid, .. }
             | IndexDeletion { index_uid }
             | SingleIndexSnapshotCreation { index_uid } => Some(index_uid),
+            | SingleIndexSnapshotImport { target_index_uid, .. } => Some(target_index_uid),
         }
     }
 
