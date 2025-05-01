@@ -425,3 +425,77 @@ fn test_task_queue_is_full() {
         .unwrap();
     handle.advance_one_failed_batch();
 }
+
+#[test]
+fn register_single_index_snapshot_creation() {
+    let (index_scheduler, mut _handle) = IndexScheduler::test(true, vec![]);
+
+    let kind = KindWithContent::SingleIndexSnapshotCreation { index_uid: S("catto") };
+    let task = index_scheduler.register(kind.clone(), None, false).unwrap();
+    index_scheduler.assert_internally_consistent();
+
+    assert_eq!(task.uid, 0);
+    assert_eq!(task.status, Status::Enqueued);
+    assert_eq!(task.kind.as_kind(), kind.as_kind());
+    assert!(task.details.is_some()); // Default details should be set
+
+    snapshot!(json_string!(task, { ".enqueuedAt" => "[date]" }), @r###"
+    {
+      "uid": 0,
+      "batchUid": null,
+      "indexUid": "catto",
+      "status": "enqueued",
+      "type": "snapshotCreation",
+      "canceledBy": null,
+      "details": {
+        "snapshotUid": null
+      },
+      "error": null,
+      "duration": null,
+      "enqueuedAt": "[date]",
+      "startedAt": null,
+      "finishedAt": null
+    }
+    "###);
+
+    snapshot!(snapshot_index_scheduler(&index_scheduler), name: "single_index_snapshot_creation_registered");
+}
+
+#[test]
+fn register_single_index_snapshot_import() {
+    let (index_scheduler, mut _handle) = IndexScheduler::test(true, vec![]);
+
+    let kind = KindWithContent::SingleIndexSnapshotImport {
+        source_snapshot_path: S("/path/to/my-index-20240501-120000.snapshot.tar.gz"),
+        target_index_uid: S("doggo"),
+    };
+    let task = index_scheduler.register(kind.clone(), None, false).unwrap();
+    index_scheduler.assert_internally_consistent();
+
+    assert_eq!(task.uid, 0);
+    assert_eq!(task.status, Status::Enqueued);
+    assert_eq!(task.kind.as_kind(), kind.as_kind());
+    assert!(task.details.is_some()); // Default details should be set
+
+    snapshot!(json_string!(task, { ".enqueuedAt" => "[date]" }), @r###"
+    {
+      "uid": 0,
+      "batchUid": null,
+      "indexUid": "doggo",
+      "status": "enqueued",
+      "type": "snapshotImport",
+      "canceledBy": null,
+      "details": {
+        "sourceSnapshotUid": null,
+        "targetIndexUid": "doggo"
+      },
+      "error": null,
+      "duration": null,
+      "enqueuedAt": "[date]",
+      "startedAt": null,
+      "finishedAt": null
+    }
+    "###);
+
+    snapshot!(snapshot_index_scheduler(&index_scheduler), name: "single_index_snapshot_import_registered");
+}
