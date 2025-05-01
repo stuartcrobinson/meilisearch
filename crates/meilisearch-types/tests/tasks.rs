@@ -1,14 +1,11 @@
-use meilisearch_types::tasks::{Details, IndexSwap, Kind, KindWithContent, Status, Task};
-use meilisearch_types::versioning;
-use roaring::RoaringBitmap;
+use meilisearch_types::tasks::{Details, Kind, KindWithContent, Status, Task};
 use time::OffsetDateTime;
-use uuid::Uuid;
 
 #[test]
 fn test_single_index_snapshot_creation_kind() {
     let kind_content = KindWithContent::SingleIndexSnapshotCreation { index_uid: "test".to_string() };
     assert_eq!(kind_content.as_kind(), Kind::SingleIndexSnapshotCreation);
-    assert_eq!(kind_content.indexes(), vec!["test"]);
+    assert_eq!(kind_content.indexes(), &["test"]);
 
     let details = kind_content.default_details();
     assert!(matches!(details, Some(Details::SingleIndexSnapshotCreation { snapshot_uid: None })));
@@ -27,13 +24,26 @@ fn test_single_index_snapshot_import_kind() {
         target_index_uid: "imported_test".to_string(),
     };
     assert_eq!(kind_content.as_kind(), Kind::SingleIndexSnapshotImport);
-    assert!(kind_content.indexes().is_empty()); // Import doesn't operate on an *existing* index initially
+    // Import task itself doesn't list an index in `indexes()`, but `index_uid()` points to the target.
+    assert!(kind_content.indexes().is_empty());
 
     let details = kind_content.default_details();
-    assert!(matches!(details, Some(Details::SingleIndexSnapshotImport { source_snapshot_uid, target_index_uid }) if source_snapshot_uid == "12345" && target_index_uid == "imported_test"));
+    match details {
+        Some(Details::SingleIndexSnapshotImport { source_snapshot_uid, target_index_uid }) => {
+            assert_eq!(source_snapshot_uid, "12345");
+            assert_eq!(target_index_uid, "imported_test");
+        }
+        _ => panic!("Expected Details::SingleIndexSnapshotImport"),
+    }
 
     let finished_details = kind_content.default_finished_details();
-    assert!(matches!(finished_details, Some(Details::SingleIndexSnapshotImport { source_snapshot_uid, target_index_uid }) if source_snapshot_uid == "12345" && target_index_uid == "imported_test"));
+    match finished_details {
+        Some(Details::SingleIndexSnapshotImport { source_snapshot_uid, target_index_uid }) => {
+            assert_eq!(source_snapshot_uid, "12345");
+            assert_eq!(target_index_uid, "imported_test");
+        }
+        _ => panic!("Expected Details::SingleIndexSnapshotImport for finished details"),
+    }
 }
 
 #[test]
@@ -44,7 +54,13 @@ fn test_single_index_snapshot_import_kind_no_uid_in_path() {
     };
     let details = kind_content.default_details();
     // When no UID is found after '-', the filename stem is used.
-    assert!(matches!(details, Some(Details::SingleIndexSnapshotImport { source_snapshot_uid, target_index_uid }) if source_snapshot_uid == "test" && target_index_uid == "imported_test"));
+    match details {
+        Some(Details::SingleIndexSnapshotImport { source_snapshot_uid, target_index_uid }) => {
+            assert_eq!(source_snapshot_uid, "test");
+            assert_eq!(target_index_uid, "imported_test");
+        }
+        _ => panic!("Expected Details::SingleIndexSnapshotImport"),
+    }
 }
 
 #[test]
@@ -100,7 +116,8 @@ fn test_task_serialization_deserialization_single_index_snapshot_import() {
 
     assert_eq!(task, deserialized);
     assert_eq!(deserialized.kind.as_kind(), Kind::SingleIndexSnapshotImport);
-    assert_eq!(deserialized.index_uid(), None); // Import doesn't have an initial index UID
+    // The index_uid() for an import task should be the target index uid.
+    assert_eq!(deserialized.index_uid(), Some("new_movies"));
     assert!(matches!(
         deserialized.details,
         Some(Details::SingleIndexSnapshotImport { ref source_snapshot_uid, ref target_index_uid })
