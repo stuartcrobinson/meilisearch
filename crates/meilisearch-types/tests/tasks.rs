@@ -1,3 +1,5 @@
+#![cfg(feature = "msfj-sis")] // Apply feature flag to the entire test file
+
 use meilisearch_types::tasks::{Details, Kind, KindWithContent, Status, Task};
 use time::OffsetDateTime;
 
