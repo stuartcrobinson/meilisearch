@@ -978,4 +978,42 @@ mod tests {
             assert_eq!(kind, k, "{kind}.to_string() returned {s} which was parsed as {k}");
         }
     }
+
+    // Tests specifically for the Single Index Snapshot feature
+    #[cfg(feature = "msfj-sis")]
+    mod single_index_snapshot {
+        use super::*; // Bring parent module's imports into scope
+        use crate::tasks::KindWithContent;
+
+        #[test]
+        fn test_single_index_snapshot_creation_details() {
+            let kind =
+                KindWithContent::SingleIndexSnapshotCreation { index_uid: "test-index".into() };
+            let details = kind.default_details();
+            assert!(matches!(details, Some(Details::SingleIndexSnapshotCreation { snapshot_uid: None })));
+        }
+
+        #[test]
+        fn test_single_index_snapshot_import_details() {
+            let kind = KindWithContent::SingleIndexSnapshotImport {
+                source_snapshot_path: "/snapshots/test-index-20240501-120000.snapshot.tar.gz"
+                    .into(),
+                target_index_uid: "new-index".into(),
+            };
+            let details = kind.default_details();
+            assert!(matches!(details, Some(Details::SingleIndexSnapshotImport { source_snapshot_uid, target_index_uid }) if source_snapshot_uid == "test-index-20240501-120000" && target_index_uid == "new-index"));
+        }
+
+        #[test]
+        fn test_single_index_snapshot_kind_from_str() {
+            assert_eq!(
+                Kind::from_str("singleIndexSnapshotCreation").unwrap(),
+                Kind::SingleIndexSnapshotCreation
+            );
+            assert_eq!(
+                Kind::from_str("singleIndexSnapshotImport").unwrap(),
+                Kind::SingleIndexSnapshotImport
+            );
+        }
+    }
 }
