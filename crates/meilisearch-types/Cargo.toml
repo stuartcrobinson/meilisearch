@@ -43,6 +43,39 @@ tokio = "1.43"
 utoipa = { version = "5.3.1", features = ["macros"] }
 uuid = { version = "1.11.0", features = ["serde", "v4"] }
 
+[features]
+# General flag for all custom tests in the meilisearchfj fork
+msfj = []
+# Specific flag for single-index snapshot tests
+msfj-sis = ["msfj"] # msfj-sis implies msfj
+
+# all specialized tokenizations
+all-tokenizations = ["milli/all-tokenizations"]
+
+# chinese specialized tokenization
+chinese = ["milli/chinese"]
+chinese-pinyin = ["milli/chinese-pinyin"]
+# hebrew specialized tokenization
+hebrew = ["milli/hebrew"]
+# japanese specialized tokenization
+japanese = ["milli/japanese"]
+# korean specialized tokenization
+korean = ["milli/korean"]
+# thai specialized tokenization
+thai = ["milli/thai"]
+# allow greek specialized tokenization
+greek = ["milli/greek"]
+# allow khmer specialized tokenization
+khmer = ["milli/khmer"]
+# allow vietnamese specialized tokenization
+vietnamese = ["milli/vietnamese"]
+# force swedish character recomposition
+swedish-recomposition = ["milli/swedish-recomposition"]
+# allow german tokenization
+german = ["milli/german"]
+# allow turkish normalization
+turkish = ["milli/turkish"]
+
 [dev-dependencies]
 # fixed version due to format breakages in v1.40
 insta = "=1.39.0"
