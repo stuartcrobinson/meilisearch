@@ -62,21 +62,12 @@ This guide outlines the steps for implementing the core backend functionality, s
   - **Define Format**: Specify the snapshot format. Recommendation: A gzipped tarball (`.snapshot.tar.gz`) containing:
     - `data.mdb`: The LMDB data file for the index.
     - `metadata.json`: A JSON file containing essential index settings and metadata.
-  - **Define Metadata**: Specify the exact content of `metadata.json`. It *must* include:
-    - `meilisearchVersion`: The exact version string (e.g., "1.7.0").
-    - `primaryKey`: String or null.
-    - `displayedAttributes`: List of strings.
-    - `searchableAttributes`: List of strings (user-defined).
-    - `filterableAttributes`: List of strings/rules.
-    - `sortableAttributes`: List of strings.
-    - `rankingRules`: List of strings.
-    - `stopWords`: List of strings.
-    - `synonyms`: Map of synonyms.
-    - `typoTolerance`: Typo tolerance settings object.
-    - `pagination`: Pagination settings object.
-    - `faceting`: Faceting settings object.
-    - `embedders`: Embedder configurations object.
-    - (Consider adding index creation/update timestamps if needed).
+  - **Define Metadata**: Specify the exact content of `metadata.json`. It *must* include core information and all relevant index settings, grouped conceptually as follows (implementation requires the specific fields):
+    - **Core Info**: `meilisearchVersion` (String, e.g., "1.7.0"), `primaryKey` (String or null).
+    - **Attribute Settings**: `displayedAttributes`, `searchableAttributes` (user-defined), `filterableAttributes`, `sortableAttributes`.
+    - **Search Tuning**: `rankingRules`, `stopWords`, `synonyms`, `typoTolerance`.
+    - **Other Settings**: `pagination`, `faceting`, `embedders`.
+    - **Timestamps**: Consider including index creation/update timestamps if needed for `Index::new_with_creation_dates`.
   - **Implement Creation**:
     - Modify the main task processing logic in `scheduler.rs` (likely `IndexScheduler::process_batch` or a called function) to recognize `KindWithContent::SingleIndexSnapshotCreation`.
     - Create a new, isolated function (e.g., `process_single_index_snapshot_creation`) to handle this task type.
@@ -87,10 +78,10 @@ This guide outlines the steps for implementing the core backend functionality, s
       - **Read Settings**: Acquire an `RoTxn` on the target `Index` and read all necessary settings. Release the `RoTxn`.
       - **Copy Data**: Call `Index::copy_to_path(...)` to copy `data.mdb` (this uses its own internal `RoTxn`). The data state will be consistent with the settings read previously due to the scheduler-level exclusion.
       - **Package**: Generate `metadata.json` (including current Meilisearch version), create the tarball with the copied `data.mdb` and `metadata.json`.
-      - **Store**: Generate a unique snapshot filename/UID (e.g., incorporating `{index_uid}-{timestamp}`). Move the final snapshot tarball to the configured `snapshots_path`.
-      - **Finalize Task**: Update the task status (Succeeded/Failed) and Details (with snapshot UID or error).
+      - **Store**: Generate a unique snapshot identifier (`snapshot_uid`, e.g., based on timestamp/UUID). Create the snapshot filename incorporating this UID (e.g., `{index_uid}-{snapshot_uid}.snapshot.tar.gz`). Move the final snapshot tarball to the configured `snapshots_path`.
+      - **Finalize Task**: Update the task status (Succeeded/Failed) and `Details` (using the generated `snapshot_uid`).
       - **Release Lock**: Release the "currently updating" status via `IndexMapper::set_currently_updating_index(None)`.
-- **Testing (TDD)**: Write integration tests: Manually enqueue a `SingleIndexSnapshotCreation` task. Run the scheduler's `tick()` method (or relevant parts). Verify the snapshot file (`.snapshot.tar.gz`) is created correctly in `snapshots_path`. Unpack and verify `metadata.json` (including version) and `data.mdb`. Check task status/details. Test error handling.
+- **Testing (TDD)**: Write integration tests: Manually enqueue a `SingleIndexSnapshotCreation` task. Run the scheduler's `tick()` method (or relevant parts). Verify the snapshot file (`.snapshot.tar.gz`) is created correctly in `snapshots_path` with the expected naming convention. Unpack and verify `metadata.json` (including version) and `data.mdb`. Check task status and `details.snapshot_uid`. Test error handling.
 
 ### 4. Implement Single Index Snapshot Import Logic
 
@@ -119,7 +110,7 @@ This guide outlines the steps for implementing the core backend functionality, s
       - Return the opened `Index`.
     - **4e. Apply Settings**: (This should happen *after* the index is successfully registered and opened, likely back in `process_single_index_snapshot_import`). Use the parsed metadata to configure the newly opened index via `update::Settings`.
     - **4f. Cleanup**: Clean up temporary unpack directory.
-- **Testing (TDD)**: Write integration tests: Place a valid snapshot file in `snapshots_path`. Enqueue an `SingleIndexSnapshotImport` task. Run `tick()`. Verify the new index exists via `IndexMapper`, on disk, has correct data (search test) and settings (API/direct check). Check task status. Test errors (invalid path, target exists, bad format, version mismatch, I/O).
+- **Testing (TDD)**: Write integration tests: Place a valid snapshot file in `snapshots_path`. Enqueue an `SingleIndexSnapshotImport` task. Run `tick()`. Verify the new index exists via `IndexMapper`, on disk, has correct data (search test) and settings (API/direct check). Check task status. **Specifically test the scenario where importing causes an LRU eviction to ensure `IndexMap::close` is handled correctly.** Test errors (invalid path, target exists, bad format, version mismatch, I/O).
 
 ### 5. Add Progress Reporting (Optional Backend Part)
 
