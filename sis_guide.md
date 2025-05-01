@@ -100,7 +100,7 @@ This guide outlines the steps for implementing the core backend functionality, s
 
 *   **Files**: `crates/index-scheduler/src/index_mapper/mod.rs`, `crates/index-scheduler/src/index_mapper/index_map.rs`.
 *   **Action**:
-    *   **Add Dedicated `IndexMapper` Method**: Implement a new method `IndexMapper::import_index_from_snapshot(target_index_uid: &str, snapshot_path: &Path) -> Result<(Index, ParsedMetadata)>` (or similar signature, where `ParsedMetadata` holds the deserialized content of `metadata.json`). This method will *not* reuse `IndexMapper::create_index`.
+    *   **Add Dedicated `IndexMapper` Method**: Implement a new method `IndexMapper::import_index_from_snapshot(target_index_uid: &str, snapshot_path: &Path) -> Result<(Index, ParsedMetadata)>`. (Define a helper struct `ParsedMetadata` to hold the deserialized content of `metadata.json`, e.g., `struct ParsedMetadata { version: String, settings: Settings<Unchecked>, ... }`). This method will *not* reuse `IndexMapper::create_index`.
     *   **Inside `IndexMapper::import_index_from_snapshot`**:
         *   **Validate Request & Path**: Perform security check on `snapshot_path` (must be within `snapshots_path`). Check if `target_index_uid` already exists using `self.index_exists`; fail if it does.
         *   **Unpack & Validate Snapshot**: Untar snapshot (e.g., to temp dir). Verify `data.mdb` and `metadata.json`. Parse `metadata.json`. Perform **Version Check**: Compare `major` and `minor` version from metadata against the current instance version. Fail with `SnapshotVersionMismatch` if they don't match (allow patch differences). Store parsed metadata.
@@ -127,7 +127,7 @@ This guide outlines the steps for implementing the core backend functionality, s
     *   **Inside `process_single_index_snapshot_import`**:
         *   Retrieve `source_snapshot_path` and `target_index_uid` from the task payload.
         *   **Call Core Logic**: Call `IndexMapper::import_index_from_snapshot` (from Step 5).
-        *   **Apply Settings**: On success from the core logic, use the returned `Index` handle and parsed metadata to apply the settings to the newly imported index (e.g., using `update::Settings` or similar mechanism). This might require a write transaction on the imported index.
+        *   **Apply Settings**: On success from the core logic, use the returned `Index` handle and parsed metadata (`ParsedMetadata.settings`) to apply the settings to the newly imported index. This typically involves creating an `update::Settings` builder, populating it from the parsed settings, and executing it within a write transaction on the imported index.
         *   **Finalize Task**: Based on the `Result` from *both* the core logic and the settings application: update the task status to `Succeeded` only if both succeeded. If either fails, update the status to `Failed` and store the relevant error in `Details`.
 *   **Testing (TDD)**: Write integration tests: Place a valid snapshot file in `snapshots_path`. Enqueue an `SingleIndexSnapshotImport` task. Run `tick()`. Verify the task's final status. Check that the new index exists (via `IndexMapper` or API) and has the correct settings applied (check settings API or direct `milli::Index` methods). Test error handling during the settings application phase (ensure task fails correctly).
 
