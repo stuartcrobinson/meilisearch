@@ -164,3 +164,13 @@ Follow these guidelines for handling errors related to the new snapshot tasks:
 4.  **Use `?` for Propagation**: Use the `?` operator within the processing logic to propagate errors cleanly up to the point where they are caught and recorded in the task.
 
 5.  **Minimize New Error Types**: Avoid creating entirely new Error enums unless the snapshot logic becomes significantly complex and warrants its own error domain. Stick to adding variants to `index_scheduler::Error` to reduce boilerplate and potential conflicts.
+
+## 5. Development Workflow Notes
+
+### *SEARCH/REPLACE block* Rules:
+
+Use the standard `SEARCH/REPLACE` block format for all code changes. Provide the full file path.
+
+**Crucially**: The `SEARCH` section must *exactly match* the existing file content, character for character, including all whitespace, comments, indentation, docstrings, etc. This is the most common cause of patch failures.
+
+Keep blocks concise, focusing on the changed lines plus minimal context for uniqueness. Only propose edits for files added to the chat. Use shell commands for file operations or running tests.
