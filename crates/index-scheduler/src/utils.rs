@@ -548,12 +548,9 @@ impl crate::IndexScheduler {
                         } else {
                             unreachable!()
                         };
-                        // Check if task_index_uid is Some before comparing.
-                        // If it's None here, it indicates an inconsistency caught by this assertion function,
-                        // but we allow the check to pass to avoid unrelated test failures.
-                        if let Some(task_index_uid) = task_index_uid.as_deref() {
-                             assert_eq!(task_index_uid, index_uid.as_str(), "Task index UID mismatch for DocumentDeletionByFilter");
-                        }
+                        // Compare the Option<String> derived from task.index_uid() before the match
+                        // with the &String extracted from the KindWithContent within this match arm.
+                        assert_eq!(task_index_uid.as_deref(), Some(index_uid.as_str()), "Task index UID mismatch for DocumentDeletionByFilter");
 
                         match status {
                             Status::Enqueued | Status::Processing => (),
