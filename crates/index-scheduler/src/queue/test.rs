@@ -458,7 +458,8 @@ mod msfj_sis_tests { // Renamed module
     assert!(task.finished_at.is_none());
 
     // Verify the task is persisted correctly
-    let persisted_task = index_scheduler.queue.tasks.get_task(task.uid).unwrap().unwrap(); // Corrected path
+    let rtxn = index_scheduler.env.read_txn().unwrap(); // Get read transaction
+    let persisted_task = index_scheduler.queue.tasks.get_task(&rtxn, task.uid).unwrap().unwrap(); // Pass transaction
     assert_eq!(persisted_task.uid, task.uid);
     assert_eq!(persisted_task.status, task.status);
     // KindWithContent doesn't impl PartialEq, so match again
@@ -506,7 +507,8 @@ fn register_single_index_snapshot_import() {
     assert!(task.finished_at.is_none());
 
     // Verify the task is persisted correctly
-    let persisted_task = index_scheduler.queue.tasks.get_task(task.uid).unwrap().unwrap(); // Corrected path
+    let rtxn = index_scheduler.env.read_txn().unwrap(); // Get read transaction
+    let persisted_task = index_scheduler.queue.tasks.get_task(&rtxn, task.uid).unwrap().unwrap(); // Pass transaction
     assert_eq!(persisted_task.uid, task.uid);
     assert_eq!(persisted_task.status, task.status);
     // KindWithContent doesn't impl PartialEq, so match again
