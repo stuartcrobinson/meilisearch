@@ -429,6 +429,7 @@ fn test_task_queue_is_full() {
 // Tests specifically for the Single Index Snapshot feature
 mod msfj_sis_tests { // Renamed module
     use super::*; // Bring parent module's imports into scope
+    use meilisearch_types::tasks::Details; // Added import
 
     #[test]
     fn register_single_index_snapshot_creation() {
@@ -457,7 +458,7 @@ mod msfj_sis_tests { // Renamed module
     assert!(task.finished_at.is_none());
 
     // Verify the task is persisted correctly
-    let persisted_task = index_scheduler.get_task(task.uid).unwrap().unwrap();
+    let persisted_task = index_scheduler.queue.tasks.get_task(task.uid).unwrap().unwrap(); // Corrected path
     assert_eq!(persisted_task.uid, task.uid);
     assert_eq!(persisted_task.status, task.status);
     // KindWithContent doesn't impl PartialEq, so match again
@@ -505,7 +506,7 @@ fn register_single_index_snapshot_import() {
     assert!(task.finished_at.is_none());
 
     // Verify the task is persisted correctly
-    let persisted_task = index_scheduler.get_task(task.uid).unwrap().unwrap();
+    let persisted_task = index_scheduler.queue.tasks.get_task(task.uid).unwrap().unwrap(); // Corrected path
     assert_eq!(persisted_task.uid, task.uid);
     assert_eq!(persisted_task.status, task.status);
     // KindWithContent doesn't impl PartialEq, so match again
