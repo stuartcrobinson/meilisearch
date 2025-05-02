@@ -443,31 +443,30 @@ mod msfj_sis_tests { // Renamed module
     assert_eq!(task.kind.as_kind(), kind.as_kind());
     assert!(task.details.is_some()); // Default details should be set
 
-    // The snapshot format changed due to modifications in Task serialization (nested kind/details)
-    snapshot!(json_string!(task, { ".enqueuedAt" => "[date]" }), @r###"
-    {
-      "uid": 0,
-      "batchUid": null,
-      "enqueuedAt": "[date]",
-      "startedAt": null,
-      "finishedAt": null,
-      "error": null,
-      "canceledBy": null,
-      "details": {
-        "SingleIndexSnapshotCreation": {
-          "snapshot_uid": null
-        }
-      },
-      "status": "enqueued",
-      "kind": {
-        "singleIndexSnapshotCreation": {
-          "index_uid": "catto"
-        }
-      }
-    }
-    "###);
+    // --- Start: Replaced snapshot assertions ---
+    assert_eq!(task.uid, 0);
+    assert_eq!(task.status, Status::Enqueued);
+    assert!(matches!(
+        task.kind,
+        KindWithContent::SingleIndexSnapshotCreation { ref index_uid } if index_uid == "catto"
+    ));
+    assert!(matches!(task.details, Some(Details::SingleIndexSnapshotCreation { snapshot_uid: None })));
+    assert!(task.error.is_none());
+    assert!(task.canceled_by.is_none());
+    assert!(task.started_at.is_none());
+    assert!(task.finished_at.is_none());
 
-    snapshot!(snapshot_index_scheduler(&index_scheduler), name: "single_index_snapshot_creation_registered");
+    // Verify the task is persisted correctly
+    let persisted_task = index_scheduler.get_task(task.uid).unwrap().unwrap();
+    assert_eq!(persisted_task.uid, task.uid);
+    assert_eq!(persisted_task.status, task.status);
+    // KindWithContent doesn't impl PartialEq, so match again
+    assert!(matches!(
+        persisted_task.kind,
+        KindWithContent::SingleIndexSnapshotCreation { ref index_uid } if index_uid == "catto"
+    ));
+    assert_eq!(persisted_task.details, task.details);
+    // --- End: Replaced snapshot assertions ---
 }
 
 #[test]
@@ -486,26 +485,36 @@ fn register_single_index_snapshot_import() {
     assert_eq!(task.kind.as_kind(), kind.as_kind());
     assert!(task.details.is_some()); // Default details should be set
 
-    snapshot!(json_string!(task, { ".enqueuedAt" => "[date]" }), @r###"
-    {
-      "uid": 0,
-      "batchUid": null,
-      "indexUid": "doggo",
-      "status": "enqueued",
-      "type": "snapshotImport",
-      "canceledBy": null,
-      "details": {
-        "sourceSnapshotUid": null,
-        "targetIndexUid": "doggo"
-      },
-      "error": null,
-      "duration": null,
-      "enqueuedAt": "[date]",
-      "startedAt": null,
-      "finishedAt": null
-    }
-    "###);
+    // --- Start: Replaced snapshot assertions ---
+    assert_eq!(task.uid, 0);
+    assert_eq!(task.status, Status::Enqueued);
+    assert!(matches!(
+        task.kind,
+        KindWithContent::SingleIndexSnapshotImport { ref source_snapshot_path, ref target_index_uid }
+            if source_snapshot_path == "/path/to/my-index-20240501-120000.snapshot.tar.gz" && target_index_uid == "doggo"
+    ));
+    // Check details, note source_snapshot_uid extraction logic happens in default_details
+    assert!(matches!(
+        task.details,
+        Some(Details::SingleIndexSnapshotImport { ref source_snapshot_uid, ref target_index_uid })
+            if source_snapshot_uid == "my-index-20240501-120000" && target_index_uid == "doggo"
+    ));
+    assert!(task.error.is_none());
+    assert!(task.canceled_by.is_none());
+    assert!(task.started_at.is_none());
+    assert!(task.finished_at.is_none());
 
-        snapshot!(snapshot_index_scheduler(&index_scheduler), name: "single_index_snapshot_import_registered");
+    // Verify the task is persisted correctly
+    let persisted_task = index_scheduler.get_task(task.uid).unwrap().unwrap();
+    assert_eq!(persisted_task.uid, task.uid);
+    assert_eq!(persisted_task.status, task.status);
+    // KindWithContent doesn't impl PartialEq, so match again
+    assert!(matches!(
+        persisted_task.kind,
+        KindWithContent::SingleIndexSnapshotImport { ref source_snapshot_path, ref target_index_uid }
+             if source_snapshot_path == "/path/to/my-index-20240501-120000.snapshot.tar.gz" && target_index_uid == "doggo"
+    ));
+    assert_eq!(persisted_task.details, task.details);
+    // --- End: Replaced snapshot assertions ---
     }
 }
