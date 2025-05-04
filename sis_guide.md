@@ -41,9 +41,10 @@ This guide outlines the steps for implementing the core backend functionality, s
 *   **Incremental Development & TDD**: Each step should result in testable backend functionality. Tests will initially involve manually constructing and registering tasks.
 *   **Test Simplicity**: Strive for simplicity and isolation in tests, particularly when testing core logic. Whenever possible, set up test state using direct, lower-level APIs (like `IndexMapper` or `milli::update` methods) instead of complex mechanisms such as the full task queue (`handle.register_task`, `handle.advance_one_successful_batch`). Direct setup leads to clearer, more focused, less coupled, and more maintainable tests that are less prone to breaking from unrelated changes in higher-level systems.
 *   **Clarity**: Define task payloads, snapshot format, and processing logic clearly.
-*   **Test Separation**: To easily distinguish custom tests for this fork (`meilisearchfj`) from upstream Meilisearch tests (aiding maintainability and merging), use a naming convention:
-    *   **Name Tests**: Prefix custom test modules or filenames with a unique identifier (e.g., `mod msfj_sis_tests { ... }` or `tests/msfj_sis_tasks.rs`). Use a general prefix like `msfj_` for all custom tests and more specific ones like `msfj_sis_` for feature-specific tests.
-    *   **Run Tests**: Use `cargo test` with a filter argument matching the prefix:
+*   **Fork Naming Conventions**: To easily distinguish custom code for this fork (`meilisearchfj`) from upstream Meilisearch code (aiding maintainability and merging), use the following naming conventions:
+    *   **New Files**: Prefix all *new* files created specifically for this fork with `fj_` (e.g., `fj_snapshot_utils.rs`).
+    *   **New Tests**: Prefix custom test modules or filenames with `msfj_` (general fork tests) or `msfj_sis_` (Single Index Snapshot specific tests) (e.g., `mod msfj_sis_tests { ... }` or `tests/msfj_sis_tasks.rs`).
+    *   **Running Tests**: Use `cargo test` with a filter argument matching the prefix:
         *   Run *all* custom tests: `cargo test msfj_`
         *   Run *only* Single Index Snapshot tests: `cargo test msfj_sis_`
 
