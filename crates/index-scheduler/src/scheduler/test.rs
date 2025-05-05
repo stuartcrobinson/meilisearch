@@ -1659,9 +1659,8 @@ mod msfj_sis_scheduler_import_tests {
 #[cfg(test)]
 mod msfj_sis_scheduler_e2e_tests {
     use super::*; // Bring parent module's imports into scope
-    use crate::test_utils::{
-        index_creation_task, replace_document_import_task, sample_documents, Opt,
-    }; // Import Opt from test_utils
+    // Remove incorrect Opt import from test_utils
+    use crate::test_utils::{index_creation_task, replace_document_import_task, sample_documents};
     use crate::IndexScheduler; // Keep IndexScheduler import separate
     use big_s::S;
     use meilisearch_types::batches::Batch; // For progress trace verification
@@ -1681,9 +1680,13 @@ mod msfj_sis_scheduler_e2e_tests {
     // Removed unused OrderByMap import
     use std::collections::{BTreeMap, BTreeSet, HashSet};
     use std::path::PathBuf;
-
-    // Opt is now imported in the parent module
     use std::fs as std_fs; // Alias std::fs to avoid conflict
+
+    // Define Opt locally within this test module for configuration
+    enum Opt {
+        SnapshotsPath(PathBuf),
+        // Add other options here if needed in the future
+    }
 
     #[actix_rt::test]
     async fn test_e2e_snapshot_create_import_verify() {
@@ -1696,9 +1699,23 @@ mod msfj_sis_scheduler_e2e_tests {
         }
         std_fs::create_dir_all(&stable_snapshot_path).expect("Failed to create stable snapshot dir");
 
-        // Configure IndexScheduler to use the stable path
+        // Define configuration options using the local Opt enum
         let options = vec![Opt::SnapshotsPath(stable_snapshot_path.clone())];
-        let (index_scheduler, mut handle) = IndexScheduler::test(true, options);
+        // Use test_with_custom_config to apply options
+        let (index_scheduler, mut handle) = IndexScheduler::test_with_custom_config(
+            vec![], // No planned failures for this test
+            |config| {
+                // Apply options from the vec
+                for opt in &options {
+                    match opt {
+                        Opt::SnapshotsPath(path) => config.snapshots_path = path.clone(),
+                    }
+                }
+                // Set autobatching explicitly (was the first arg to ::test)
+                config.autobatching_enabled = true;
+                None // Return None to use default version
+            },
+        );
 
         // Define UIDs directly where used to ensure 'static lifetime
         let target_index_uid = S("target_e2e");
