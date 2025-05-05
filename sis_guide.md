@@ -47,7 +47,7 @@ This guide outlines the steps for implementing the core backend functionality, s
     *   **Running Tests**: Use `cargo test` with a filter argument matching the prefix:
         *   Run *all* custom tests: `cargo test msfj_`
         *   Run *only* Single Index Snapshot tests: `cargo test msfj_sis_`
-    *   **New Code in Existing Files**: **IMPORTANT:** Prefix *all* new functions, structs, enums, or significant code blocks added to *existing* Meilisearch files with `fj_` (e.g., `fn fj_my_helper_function(...)`, `struct FjMyStruct { ... }`). This is crucial for differentiating fork-specific additions within upstream files and preventing merge conflicts. **Do not forget this prefix.**
+    *   **New Code in Existing Files**: **CRITICAL:** Prefix *all* new functions, structs, enums, or significant code blocks added to *existing* Meilisearch files with `fj_` (e.g., `fn fj_my_helper_function(...)`, `struct FjMyStruct { ... }`). This applies even when adding a new method to an existing `impl` block. This is crucial for differentiating fork-specific additions within upstream files and preventing merge conflicts. **Do not forget this prefix.**
 
 ### Implementation Steps:
 
