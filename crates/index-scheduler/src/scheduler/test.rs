@@ -1701,17 +1701,17 @@ mod msfj_sis_scheduler_e2e_tests {
 
         // Apply diverse settings
         let mut settings = Settings::<Unchecked>::default();
-        // Use correct enum variant for WildcardSetting
-        settings.displayed_attributes = WildcardSetting::Set(vec![S("id"), S("name")]);
-        settings.searchable_attributes = WildcardSetting::Set(vec![S("name"), S("description")]);
+        // Use .into() to construct WildcardSetting from Setting::Set
+        settings.displayed_attributes = Setting::Set(vec![S("id"), S("name")]).into();
+        settings.searchable_attributes = Setting::Set(vec![S("name"), S("description")]).into();
         settings.filterable_attributes =
             Setting::Set(vec![FilterableAttributesRule::Field(S("category"))]);
         settings.sortable_attributes = Setting::Set(vec![S("price")].into_iter().collect()); // Use BTreeSet
-        // Use milli::Criterion for ranking rules
+        // Convert Criterion to RankingRuleView using .into()
         settings.ranking_rules = Setting::Set(vec![
-            Criterion::Typo,
-            Criterion::Words,
-            Criterion::Proximity,
+            Criterion::Typo.into(),
+            Criterion::Words.into(),
+            Criterion::Proximity.into(),
         ]);
         settings.stop_words = Setting::Set(BTreeSet::from([S("the"), S("a")]));
         settings.synonyms = Setting::Set(BTreeMap::from([(S("cat"), vec![S("feline")])]));
@@ -1727,7 +1727,8 @@ mod msfj_sis_scheduler_e2e_tests {
                 },
             ),
             disable_on_words: Setting::Set(BTreeSet::from([S("exactword")])),
-            disable_on_attributes: Setting::Set(HashSet::from([S("exactattr")])),
+            // Use BTreeSet for disable_on_attributes
+            disable_on_attributes: Setting::Set(BTreeSet::from([S("exactattr")])),
         });
         // Faceting
         settings.faceting = Setting::Set(meilisearch_types::settings::FacetingSettings {
@@ -2030,17 +2031,17 @@ mod msfj_sis_scheduler_e2e_tests {
             "Localized attributes mismatch"
         );
         // Tokenization (Compare Option<&BTreeSet<String>> directly)
-        // Clone the Option<&BTreeSet> to get Option<BTreeSet> for comparison
-        let source_separator_tokens: Option<BTreeSet<String>> = source_index.separator_tokens(&source_rtxn).unwrap().cloned();
-        let target_separator_tokens: Option<BTreeSet<String>> = target_index.separator_tokens(&target_rtxn).unwrap().cloned();
+        // Use .map(|set_ref| set_ref.clone()) to get Option<BTreeSet<String>>
+        let source_separator_tokens: Option<BTreeSet<String>> = source_index.separator_tokens(&source_rtxn).unwrap().map(|s| s.clone());
+        let target_separator_tokens: Option<BTreeSet<String>> = target_index.separator_tokens(&target_rtxn).unwrap().map(|s| s.clone());
         assert_eq!(source_separator_tokens, target_separator_tokens, "Separator tokens mismatch");
 
-        let source_non_separator_tokens: Option<BTreeSet<String>> = source_index.non_separator_tokens(&source_rtxn).unwrap().cloned();
-        let target_non_separator_tokens: Option<BTreeSet<String>> = target_index.non_separator_tokens(&target_rtxn).unwrap().cloned();
+        let source_non_separator_tokens: Option<BTreeSet<String>> = source_index.non_separator_tokens(&source_rtxn).unwrap().map(|s| s.clone());
+        let target_non_separator_tokens: Option<BTreeSet<String>> = target_index.non_separator_tokens(&target_rtxn).unwrap().map(|s| s.clone());
         assert_eq!(source_non_separator_tokens, target_non_separator_tokens, "Non-separator tokens mismatch");
 
-        let source_dictionary: Option<BTreeSet<String>> = source_index.dictionary(&source_rtxn).unwrap().cloned();
-        let target_dictionary: Option<BTreeSet<String>> = target_index.dictionary(&target_rtxn).unwrap().cloned();
+        let source_dictionary: Option<BTreeSet<String>> = source_index.dictionary(&source_rtxn).unwrap().map(|s| s.clone());
+        let target_dictionary: Option<BTreeSet<String>> = target_index.dictionary(&target_rtxn).unwrap().map(|s| s.clone());
         assert_eq!(source_dictionary, target_dictionary, "Dictionary mismatch");
         // Search Cutoff
         assert_eq!(
