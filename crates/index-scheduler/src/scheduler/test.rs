@@ -1812,6 +1812,12 @@ mod msfj_sis_scheduler_e2e_tests {
             let uuid_part = snapshot_uid.split('-').last().unwrap_or(&snapshot_uid); // Get part after last '-' or the whole string
             let filename = format!("{}-{}.snapshot.tar.gz", S("source_e2e"), uuid_part); // Use literal index name and extracted UUID
             snapshot_path = index_scheduler.fj_snapshots_path().join(filename); // Assign to outer scope variable
+
+            // === Test Logging Step ===
+            tracing::info!(target: "snapshot_e2e_test", "Retrieved snapshot_uid from task: {}", snapshot_uid);
+            tracing::info!(target: "snapshot_e2e_test", "Constructed expected snapshot path for assertion: {:?}", snapshot_path);
+            // === End Test Logging Step ===
+
             assert!(snapshot_path.is_file(), "Snapshot file not found at expected path: {:?}", snapshot_path);
 
             // Verify creation progress trace

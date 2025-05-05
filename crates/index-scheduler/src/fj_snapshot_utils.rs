@@ -214,6 +214,12 @@ pub fn create_index_snapshot(
     tracing::info!(target: "snapshot_creation", "Successfully created snapshot: {:?}", snapshot_filepath);
     tracing::info!(target: "snapshot_creation", "Exiting create_index_snapshot successfully for: {:?}", snapshot_filepath);
 
+    // === Internal Verification Step ===
+    assert!(snapshot_filepath.is_file(), "[INTERNAL CHECK FAILED] Snapshot file {:?} does not exist or is not a file just before returning Ok from create_index_snapshot.", snapshot_filepath);
+    tracing::info!(target: "snapshot_creation", "[Internal Check Passed] Snapshot file {:?} exists before returning Ok.", snapshot_filepath);
+    // === End Internal Verification Step ===
+
+
     Ok(snapshot_filepath) // Return the full path
 }
 
