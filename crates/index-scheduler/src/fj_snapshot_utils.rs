@@ -112,31 +112,10 @@ pub fn create_index_snapshot(
     drop(file); // Ensure file handle is closed
     tracing::info!(target: "snapshot_creation", "Closed snapshot file handle");
 
-    // Verify the final snapshot file exists and has content
-    tracing::info!(target: "snapshot_creation", "Verifying final snapshot file existence and content at: {:?}", snapshot_filepath);
-    if !snapshot_filepath.exists() {
-        return Err(Error::SnapshotCreationFailed {
-            index_uid: index_uid.to_string(),
-            source: Box::new(std::io::Error::new(
-                std::io::ErrorKind::NotFound,
-                "Snapshot file does not exist after creation process completed.",
-            )),
-        });
-    }
-    let file_meta = std::fs::metadata(&snapshot_filepath).map_err(|e| Error::IoError(e))?;
-    if file_meta.len() == 0 {
-         return Err(Error::SnapshotCreationFailed {
-            index_uid: index_uid.to_string(),
-            source: Box::new(std::io::Error::new(
-                std::io::ErrorKind::InvalidData,
-                "Snapshot file was created but is empty.",
-            )),
-        });
-    }
-
-    tracing::info!(target: "snapshot_creation", "Verification successful for: {:?}", snapshot_filepath);
+    // Verification moved to the caller (`create_test_snapshot`)
 
     // Temp dir is automatically cleaned up when `temp_dir` goes out of scope here.
+    tracing::info!(target: "snapshot_creation", "Exiting create_index_snapshot successfully for: {:?}", snapshot_filepath);
 
     Ok(snapshot_uid)
 }
