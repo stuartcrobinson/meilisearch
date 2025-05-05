@@ -41,10 +41,11 @@ pub fn create_index_snapshot(
     index_uid: &str,
     index: &Index, // Revert to accepting Index handle
     metadata: SnapshotMetadata, // Accept pre-read metadata
-    snapshots_path: &Path,
-) -> crate::Result<String> {
+    snapshots_path: &Path, // This should be the *directory*
+) -> crate::Result<PathBuf> { // Return the full path
     let snapshot_uid = Uuid::new_v4().to_string();
     let snapshot_filename = format!("{}-{}.snapshot.tar.gz", index_uid, snapshot_uid);
+    // Construct the final path within the provided directory
     let snapshot_filepath = snapshots_path.join(&snapshot_filename);
 
     // Ensure the target directory exists *before* any file operations within it
@@ -213,7 +214,7 @@ pub fn create_index_snapshot(
     tracing::info!(target: "snapshot_creation", "Successfully created snapshot: {:?}", snapshot_filepath);
     tracing::info!(target: "snapshot_creation", "Exiting create_index_snapshot successfully for: {:?}", snapshot_filepath);
 
-    Ok(snapshot_uid)
+    Ok(snapshot_filepath) // Return the full path
 }
 
 /// Reads the necessary metadata and settings from the index using an existing transaction.

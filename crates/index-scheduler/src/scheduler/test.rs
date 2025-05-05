@@ -1006,10 +1006,11 @@ mod msfj_sis_scheduler_import_tests {
                 panic!("Snapshot directory {:?} is not writable: {}", snapshot_dir, e);
             });
 
-        let snapshot_path = snapshot_dir.join(target_snapshot_name);
+        // snapshot_dir is the directory where the snapshot will be created.
+        // snapshot_path will be the *actual* path returned by the creation function.
 
-        // Log the path just before creation
-        tracing::info!(target: "test::snapshot", "Attempting to create snapshot at: {:?}", snapshot_path);
+        // Log the directory just before creation attempt
+        tracing::info!(target: "test::snapshot", "Attempting to create snapshot in directory: {:?}", snapshot_dir);
 
         let index_rtxn = index.read_txn().unwrap();
         // Handle potential error from reading metadata
@@ -1019,28 +1020,28 @@ mod msfj_sis_scheduler_import_tests {
             });
         drop(index_rtxn); // Drop txn before copying
 
-        // Use the correct function name and capture the result
-        let creation_result = fj_snapshot_utils::create_index_snapshot(
+        // Use the correct function name and capture the *returned path*
+        let snapshot_path = fj_snapshot_utils::create_index_snapshot(
             source_index_uid, // Pass index_uid as first argument
             &index,
             metadata,
-            &snapshot_path,
-        );
-
-        // Panic with detailed error if creation failed
-        creation_result.unwrap_or_else(|e| {
-            panic!("fj_snapshot_utils::create_index_snapshot failed for path {:?}: {}", snapshot_path, e);
+            &snapshot_dir, // Pass the directory path
+        )
+        .unwrap_or_else(|e| {
+             // Panic with detailed error if creation failed, showing the intended directory
+            panic!("fj_snapshot_utils::create_index_snapshot failed for directory {:?}: {}", snapshot_dir, e);
         });
 
-        // Add assertion here to check immediately after successful creation call
+        // Now snapshot_path holds the actual path to the created file.
+        // Perform checks on this correct path.
 
         // Remove diagnostic delay as it didn't help
         // std::thread::sleep(std::time::Duration::from_millis(150));
 
-        // Add extra diagnostics immediately before the assert
-        tracing::info!(target: "test::snapshot", "[create_test_snapshot] Starting final checks before assert for path: {:?}", snapshot_path);
+        // Add extra diagnostics immediately before the assert using the correct snapshot_path
+        tracing::info!(target: "test::snapshot", "[create_test_snapshot] Starting final checks before assert for actual path: {:?}", snapshot_path);
 
-        // Check 1: List parent directory contents
+        // Check 1: List parent directory contents (should be snapshot_dir)
         if let Some(parent) = snapshot_path.parent() {
              tracing::info!(target: "test::snapshot", "[create_test_snapshot] Listing contents of parent directory: {:?}", parent);
              match std::fs::read_dir(parent) {
@@ -1058,25 +1059,26 @@ mod msfj_sis_scheduler_import_tests {
             tracing::warn!(target: "test::snapshot", "[create_test_snapshot] Could not get parent directory for listing.");
         }
 
-        // Check 2: Attempt to open the file
-        tracing::info!(target: "test::snapshot", "[create_test_snapshot] Attempting to open file: {:?}", snapshot_path);
+        // Check 2: Attempt to open the actual snapshot file
+        tracing::info!(target: "test::snapshot", "[create_test_snapshot] Attempting to open actual file: {:?}", snapshot_path);
         match std::fs::File::open(&snapshot_path) {
             Ok(file) => {
-                tracing::info!(target: "test::snapshot", "  - Successfully opened file. Size: {:?}", file.metadata().map(|m| m.len()));
+                tracing::info!(target: "test::snapshot", "  - Successfully opened actual file. Size: {:?}", file.metadata().map(|m| m.len()));
                 drop(file); // Close the file handle
             }
-            Err(e) => tracing::error!(target: "test::snapshot", "  - Failed to open file: {}", e),
+            Err(e) => tracing::error!(target: "test::snapshot", "  - Failed to open actual file: {}", e),
         }
 
-        // Check 3: Standard checks (exists, is_file, metadata)
+        // Check 3: Standard checks (exists, is_file, metadata) on the actual snapshot file
         let exists = snapshot_path.exists();
         let is_file = snapshot_path.is_file();
         let metadata_result = std::fs::metadata(&snapshot_path);
-        tracing::info!(target: "test::snapshot", "[create_test_snapshot] Standard checks: exists={}, is_file={}, metadata={:?}", exists, is_file, metadata_result);
+        tracing::info!(target: "test::snapshot", "[create_test_snapshot] Standard checks on actual path: exists={}, is_file={}, metadata={:?}", exists, is_file, metadata_result);
 
-        // The assertion that is failing
-        assert!(snapshot_path.is_file(), "[create_test_snapshot] Snapshot file missing immediately after creation call: {:?}", snapshot_path);
+        // The assertion should now pass as it checks the correct path
+        assert!(snapshot_path.is_file(), "[create_test_snapshot] Snapshot file missing immediately after creation call (checking actual path): {:?}", snapshot_path);
 
+        // Return the actual path of the created snapshot
         snapshot_path
     }
 
