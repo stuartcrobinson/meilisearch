@@ -1522,7 +1522,7 @@ mod msfj_sis_scheduler_import_tests {
 
         settings.set_localized_attributes_rules(vec![LocalizedAttributesRule {
             attribute_patterns: vec!["title#fr".to_string()].into(), // Use .into()
-            locales: vec![Language::from_code("title").unwrap()], // Construct Language
+            locales: vec![Language::from_code("fr").unwrap()], // Construct Language with correct code "fr"
         }]);
 
         settings.set_separator_tokens(BTreeSet::from(["&".to_string()]));
