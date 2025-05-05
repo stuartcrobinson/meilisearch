@@ -966,6 +966,13 @@ mod msfj_sis_scheduler_import_tests {
         source_index_uid: &str,
         target_snapshot_name: &str,
     ) -> PathBuf {
+        // Initialize tracing subscriber for this test if not already done
+        // This helps ensure logs are printed during test execution.
+        let _ = tracing_subscriber::fmt()
+            .with_env_filter(tracing_subscriber::EnvFilter::from_default_env())
+            .with_test_writer() // Use test writer to work with cargo test capture
+            .try_init(); // Use try_init to avoid panic if already initialized
+
         // 1. Create source index and add data/settings
         let task = index_creation_task(source_index_uid, Some("id"));
         let _task_id = index_scheduler.register(task, None, false).unwrap().uid; // Prefix unused task_id
