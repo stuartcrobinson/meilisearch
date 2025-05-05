@@ -1818,6 +1818,12 @@ mod msfj_sis_scheduler_e2e_tests {
             tracing::info!(target: "snapshot_e2e_test", "Constructed expected snapshot path for assertion: {:?}", snapshot_path);
             // === End Test Logging Step ===
 
+            // === Directory Check ===
+            let parent_dir = snapshot_path.parent().expect("Snapshot path should have a parent directory");
+            tracing::info!(target: "snapshot_e2e_test", "Checking parent directory existence before assertion loop: {:?} -> Exists: {}", parent_dir, parent_dir.exists());
+            // === End Directory Check ===
+
+
             // Retry assertion with delay for filesystem sync
             let mut found = false;
             for i in 0..5 { // Retry up to 5 times
@@ -1826,7 +1832,10 @@ mod msfj_sis_scheduler_e2e_tests {
                     tracing::info!(target: "snapshot_e2e_test", "Snapshot file found after {} retries.", i);
                     break;
                 }
-                tracing::warn!(target: "snapshot_e2e_test", "Snapshot file not found on attempt {}, retrying...", i);
+                // Add more detailed logging on failure
+                let file_exists = snapshot_path.exists();
+                let parent_exists = parent_dir.exists();
+                tracing::warn!(target: "snapshot_e2e_test", "Snapshot file not found on attempt {}. is_file: false, exists: {}, parent_exists: {}. Retrying...", i, file_exists, parent_exists);
                 std::thread::sleep(std::time::Duration::from_millis(100)); // Wait 100ms
             }
             assert!(found, "Snapshot file not found at expected path after retries: {:?}", snapshot_path);
