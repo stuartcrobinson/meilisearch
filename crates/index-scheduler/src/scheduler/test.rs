@@ -1965,9 +1965,9 @@ mod msfj_sis_scheduler_e2e_tests {
             target_index.exact_words(&target_rtxn).unwrap(),
             "Exact words mismatch"
         );
-         assert_eq!(
-            source_index.exact_attributes(&source_rtxn).unwrap().into_iter().collect::<HashSet<_>>(), // Convert Vec<&str> to HashSet<String>
-            target_index.exact_attributes(&target_rtxn).unwrap().into_iter().collect::<HashSet<_>>(), // Convert Vec<&str> to HashSet<String>
+        assert_eq!(
+            source_index.exact_attributes(&source_rtxn).unwrap().into_iter().map(String::from).collect::<HashSet<String>>(), // Explicitly collect HashSet<String>
+            target_index.exact_attributes(&target_rtxn).unwrap().into_iter().map(String::from).collect::<HashSet<String>>(), // Explicitly collect HashSet<String>
             "Exact attributes mismatch"
         );
         // Faceting
@@ -2005,7 +2005,7 @@ mod msfj_sis_scheduler_e2e_tests {
             target_index.localized_attributes_rules(&target_rtxn).unwrap(),
             "Localized attributes mismatch"
         );
-        // Tokenization
+        // Tokenization (Compare Option<&BTreeSet<String>>)
         assert_eq!(
             source_index.separator_tokens(&source_rtxn).unwrap(),
             target_index.separator_tokens(&target_rtxn).unwrap(),
