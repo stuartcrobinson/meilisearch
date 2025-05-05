@@ -20,7 +20,7 @@ use crate::insta_snapshot::snapshot_index_scheduler;
 use crate::{Error, IndexScheduler, IndexSchedulerOptions};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(crate) enum Breakpoint {
+pub enum Breakpoint { // Made public
     // this state is only encountered while creating the scheduler in the test suite.
     Init,
 
@@ -34,7 +34,7 @@ pub(crate) enum Breakpoint {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(crate) enum FailureLocation {
+pub enum FailureLocation { // Made public
     InsideCreateBatch,
     InsideProcessBatch,
     PanicInsideProcessBatch,
@@ -180,7 +180,7 @@ impl IndexScheduler {
 }
 
 /// Return a `KindWithContent::IndexCreation` task
-pub(crate) fn index_creation_task(
+pub fn index_creation_task( // Made public
     index: &'static str,
     primary_key: Option<&'static str>,
 ) -> KindWithContent {
@@ -195,7 +195,7 @@ pub(crate) fn index_creation_task(
 /// - `content_file` is given as parameter
 /// - `documents_count` is given as parameter
 /// - `allow_index_creation` is set to `true`
-pub(crate) fn replace_document_import_task(
+pub fn replace_document_import_task( // Made public
     index: &'static str,
     primary_key: Option<&'static str>,
     content_file_uuid: u128,
@@ -212,7 +212,7 @@ pub(crate) fn replace_document_import_task(
 }
 
 /// Adapting to the new json reading interface
-pub(crate) fn read_json(
+pub fn read_json( // Made public
     bytes: &[u8],
     write: impl Write,
 ) -> std::result::Result<u64, DocumentFormatError> {
@@ -228,7 +228,7 @@ pub(crate) fn read_json(
 /// The update file contains just one simple document whose id is given by `document_id`.
 ///
 /// The uuid of the file and its documents count is returned.
-pub(crate) fn sample_documents(
+pub fn sample_documents( // Made public
     index_scheduler: &IndexScheduler,
     file_uuid: u128,
     document_id: usize,
@@ -245,7 +245,7 @@ pub(crate) fn sample_documents(
     (file, documents_count)
 }
 
-pub struct IndexSchedulerHandle {
+pub struct IndexSchedulerHandle { // Made struct public
     _tempdir: TempDir,
     index_scheduler: IndexScheduler,
     test_breakpoint_rcv: crossbeam_channel::Receiver<(Breakpoint, bool)>,
