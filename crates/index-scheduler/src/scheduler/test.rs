@@ -10,7 +10,7 @@ use meilisearch_types::settings::SettingEmbeddingSettings;
 use meilisearch_types::tasks::{IndexSwap, KindWithContent};
 use roaring::RoaringBitmap;
 
-use std::fs::File;
+// Removed unused import: std::fs::File;
 // Removed unused imports: File, Write, PathBuf, fj_snapshot_utils, HashSet
 
 use crate::insta_snapshot::snapshot_index_scheduler;
@@ -942,8 +942,8 @@ fn create_and_list_index() {
 mod msfj_sis_scheduler_import_tests {
     use super::*; // Keep import from parent
     // Move necessary imports inside the module
-    // Try importing from parent module's parent scope
-    use super::super::test_utils::{handle_tasks, TempIndex};
+    // Revert to crate::test_utils path
+    use crate::test_utils::{handle_tasks, TempIndex};
     use meilisearch_types::milli::vector::settings::{EmbedderSource, EmbeddingSettings};
     // Removed unused import: SettingEmbeddingSettings
     use meilisearch_types::tasks::KindWithContent;
@@ -957,8 +957,8 @@ mod msfj_sis_scheduler_import_tests {
     use meilisearch_types::tasks::{Details, Status};
     use milli::FilterableAttributesRule;
     use milli::update::Setting;
-    // Revert to importing StatusCode via actix_web
-    use actix_web::http::StatusCode;
+    // Import StatusCode from http crate
+    use http::StatusCode;
 
     // Helper to create a valid snapshot for import tests
     // Moved inside the module
@@ -1114,9 +1114,9 @@ mod msfj_sis_scheduler_import_tests {
         assert_eq!(imported_embedders.len(), 1);
         assert!(imported_embedders.iter().any(|c| c.name == "default"));
         let config = imported_embedders.iter().find(|c| c.name == "default").unwrap();
-        // Try accessing fields directly on config.config
-        assert!(matches!(config.config.source, EmbedderSource::UserProvided));
-        assert_eq!(config.config.dimensions, Some(1));
+        // Access fields via embedder_options again
+        assert!(matches!(config.config.embedder_options.source, EmbedderSource::UserProvided));
+        assert_eq!(config.config.embedder_options.dimensions, Some(1));
     }
 
     #[test]
