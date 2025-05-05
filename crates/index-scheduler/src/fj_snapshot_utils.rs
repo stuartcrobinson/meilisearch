@@ -2,17 +2,16 @@
 use std::fs::File;
 use std::path::Path;
 
+use std::fs; // Add fs import for cleanup
+
 use flate2::write::GzEncoder;
 use flate2::Compression;
-// Remove unused imports related to manual settings construction
 use meilisearch_types::{
     heed::{self},
     milli::{self, Index},
-    // Removed unused settings imports: Settings as ApiSettings, Unchecked
 };
 use tar::Builder;
-use tempfile::tempdir_in;
-// Remove OffsetDateTime import
+// Remove tempfile import: use tempfile::tempdir_in;
 use uuid::Uuid;
 
 use crate::error::Error;
@@ -48,71 +47,119 @@ pub fn create_index_snapshot(
     let snapshot_filename = format!("{}-{}.snapshot.tar.gz", index_uid, snapshot_uid);
     let snapshot_filepath = snapshots_path.join(&snapshot_filename);
 
-    // Use a temporary directory within the main data directory if possible,
-    // otherwise fallback to the system default. This helps ensure atomicity
-    // and efficiency if snapshots_path is on the same filesystem.
-    let temp_dir_base = snapshots_path.parent().unwrap_or(snapshots_path);
-    tracing::info!(target: "snapshot_creation", "Using temp base dir: {:?}", temp_dir_base);
-    let temp_dir = tempdir_in(temp_dir_base).map_err(|e| Error::IoError(e))?;
-    let temp_path = temp_dir.path();
-    tracing::info!(target: "snapshot_creation", "Created temp dir: {:?}", temp_path);
+    // Ensure the target directory exists *before* any file operations within it
+    tracing::info!(target: "snapshot_creation", "Ensuring target snapshot directory exists: {:?}", snapshots_path);
+    fs::create_dir_all(snapshots_path).map_err(|e| Error::IoError(e))?;
 
-    // Metadata is now passed in, no need to read it here.
+    // Define temporary paths *within* the final snapshot directory
+    let temp_metadata_path = snapshots_path.join(format!("metadata-{}.json.tmp", snapshot_uid));
+    let temp_data_path = snapshots_path.join(format!("data-{}.mdb.tmp", snapshot_uid));
 
-    // Write the provided metadata to metadata.json in the temp directory
-    tracing::info!(target: "snapshot_creation", "Writing metadata.json to temp dir");
-    let metadata_path = temp_path.join("metadata.json");
-    let metadata_file = File::create(&metadata_path).map_err(|e| Error::IoError(e))?;
-    serde_json::to_writer(metadata_file, &metadata)
-        .map_err(|e| Error::SnapshotCreationFailed {
+    // Defer cleanup of temporary files using a scope guard or similar pattern
+    // For simplicity here, we'll use explicit cleanup in success/error paths,
+    // but a guard is more robust.
+    let cleanup = |path1: &Path, path2: &Path| {
+        let _ = fs::remove_file(path1); // Ignore errors during cleanup
+        let _ = fs::remove_file(path2);
+    };
+
+    // Write metadata directly to the temporary path in the snapshot directory
+    tracing::info!(target: "snapshot_creation", "Writing metadata to temp file: {:?}", temp_metadata_path);
+    match File::create(&temp_metadata_path) {
+        Ok(metadata_file) => {
+            if let Err(e) = serde_json::to_writer(metadata_file, &metadata) {
+                cleanup(&temp_metadata_path, &temp_data_path);
+                return Err(Error::SnapshotCreationFailed {
+                    index_uid: index_uid.to_string(),
+                    source: Box::new(e),
+                });
+            }
+        }
+        Err(e) => {
+            cleanup(&temp_metadata_path, &temp_data_path);
+            return Err(Error::IoError(e));
+        }
+    }
+    tracing::info!(target: "snapshot_creation", "Successfully wrote temp metadata");
+
+    // Copy data.mdb directly to the temporary path in the snapshot directory
+    tracing::info!(target: "snapshot_creation", "Copying data.mdb to temp file: {:?}", temp_data_path);
+    if let Err(e) = index.copy_to_path(&temp_data_path, heed::CompactionOption::Enabled) {
+        cleanup(&temp_metadata_path, &temp_data_path);
+        return Err(Error::SnapshotCreationFailed {
             index_uid: index_uid.to_string(),
             source: Box::new(e),
-        })?;
-    tracing::info!(target: "snapshot_creation", "Successfully wrote metadata.json");
+        });
+    }
+    tracing::info!(target: "snapshot_creation", "Successfully copied temp data.mdb");
 
-    // Copy data.mdb to the temp directory using index.copy_to_path
-    let temp_data_path = temp_path.join("data.mdb");
-    tracing::info!(target: "snapshot_creation", "Copying data.mdb to {:?}", temp_data_path);
-    // Use compaction for potentially smaller snapshots
-    index
-        .copy_to_path(&temp_data_path, heed::CompactionOption::Enabled)
-        .map_err(|e| {
-            Error::SnapshotCreationFailed {
-                index_uid: index_uid.to_string(),
-                source: Box::new(e),
-            }
-        })?;
-    tracing::info!(target: "snapshot_creation", "Successfully copied data.mdb");
-
-    // Ensure the target directory exists before creating the file
-    tracing::info!(target: "snapshot_creation", "Ensuring target snapshot directory exists: {:?}", snapshots_path);
-    std::fs::create_dir_all(snapshots_path).map_err(|e| Error::IoError(e))?;
-
-    // Create the final gzipped tarball
+    // Create the final gzipped tarball directly
     tracing::info!(target: "snapshot_creation", "Creating final tarball at: {:?}", snapshot_filepath);
-    let snapshot_file = File::create(&snapshot_filepath).map_err(|e| Error::IoError(e))?;
-    let gz_encoder = GzEncoder::new(snapshot_file, Compression::default());
-    let mut tar_builder = Builder::new(gz_encoder);
+    match File::create(&snapshot_filepath) {
+        Ok(snapshot_file) => {
+            let gz_encoder = GzEncoder::new(snapshot_file, Compression::default());
+            let mut tar_builder = Builder::new(gz_encoder);
 
-    // Add data.mdb and metadata.json to the archive
-    tar_builder.append_path_with_name(&temp_data_path, "data.mdb").map_err(|e| Error::IoError(e))?; // Use temp_data_path
-    tar_builder
-        .append_path_with_name(&metadata_path, "metadata.json")
-        .map_err(|e| Error::IoError(e))?;
+            // Add files from their temporary paths within snapshots_path
+            if let Err(e) = tar_builder.append_path_with_name(&temp_data_path, "data.mdb") {
+                cleanup(&temp_metadata_path, &temp_data_path);
+                let _ = fs::remove_file(&snapshot_filepath); // Attempt cleanup of partial tarball
+                return Err(Error::IoError(e));
+            }
+            if let Err(e) = tar_builder.append_path_with_name(&temp_metadata_path, "metadata.json")
+            {
+                cleanup(&temp_metadata_path, &temp_data_path);
+                let _ = fs::remove_file(&snapshot_filepath);
+                return Err(Error::IoError(e));
+            }
 
-    // Finish writing the archive
-    tar_builder.finish().map_err(|e| Error::IoError(e))?;
-    tracing::info!(target: "snapshot_creation", "Finished tar builder");
-    let gz_encoder = tar_builder.into_inner().map_err(|e| Error::IoError(e))?;
-    let file = gz_encoder.finish().map_err(|e| Error::IoError(e))?;
-    tracing::info!(target: "snapshot_creation", "Finished Gzip encoder");
-    // Explicitly sync data to disk
-    file.sync_all().map_err(|e| Error::IoError(e))?;
-    tracing::info!(target: "snapshot_creation", "Synced file to disk");
-    drop(file); // Ensure file handle is closed
-    tracing::info!(target: "snapshot_creation", "Closed snapshot file handle");
+            // Finish writing the archive
+            if let Err(e) = tar_builder.finish() {
+                cleanup(&temp_metadata_path, &temp_data_path);
+                let _ = fs::remove_file(&snapshot_filepath);
+                return Err(Error::IoError(e));
+            }
+            tracing::info!(target: "snapshot_creation", "Finished tar builder");
+            let gz_encoder = match tar_builder.into_inner() {
+                Ok(enc) => enc,
+                Err(e) => {
+                    cleanup(&temp_metadata_path, &temp_data_path);
+                    let _ = fs::remove_file(&snapshot_filepath);
+                    return Err(Error::IoError(e));
+                }
+            };
+            let file = match gz_encoder.finish() {
+                Ok(f) => f,
+                Err(e) => {
+                    cleanup(&temp_metadata_path, &temp_data_path);
+                    let _ = fs::remove_file(&snapshot_filepath);
+                    return Err(Error::IoError(e));
+                }
+            };
+            tracing::info!(target: "snapshot_creation", "Finished Gzip encoder");
 
-    // Attempt to sync the parent directory as well
+            // Explicitly sync data to disk
+            if let Err(e) = file.sync_all() {
+                cleanup(&temp_metadata_path, &temp_data_path);
+                let _ = fs::remove_file(&snapshot_filepath);
+                return Err(Error::IoError(e));
+            }
+            tracing::info!(target: "snapshot_creation", "Synced file to disk");
+            drop(file); // Ensure file handle is closed
+            tracing::info!(target: "snapshot_creation", "Closed snapshot file handle");
+        }
+        Err(e) => {
+            cleanup(&temp_metadata_path, &temp_data_path);
+            return Err(Error::IoError(e));
+        }
+    }
+
+    // Cleanup temporary files *after* successful tarball creation and sync
+    cleanup(&temp_metadata_path, &temp_data_path);
+    tracing::info!(target: "snapshot_creation", "Cleaned up temporary files");
+
+
+    // Attempt to sync the parent directory as well (remains the same)
     if let Some(parent_dir) = snapshot_filepath.parent() {
         tracing::info!(target: "snapshot_creation", "Attempting to sync parent directory: {:?}", parent_dir);
         match File::open(parent_dir) {
@@ -154,7 +201,8 @@ pub fn create_index_snapshot(
 
     // Verification moved to the caller (`create_test_snapshot`)
 
-    // Temp dir is automatically cleaned up when `temp_dir` goes out of scope here.
+    // Log final path before returning
+    tracing::info!(target: "snapshot_creation", "Successfully created snapshot: {:?}", snapshot_filepath);
     tracing::info!(target: "snapshot_creation", "Exiting create_index_snapshot successfully for: {:?}", snapshot_filepath);
 
     Ok(snapshot_uid)
