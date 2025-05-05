@@ -1575,12 +1575,13 @@ mod msfj_sis_scheduler_import_tests {
         let index_rtxn = imported_index.read_txn().unwrap();
 
         // Verify Typo Tolerance (using individual getters)
-        assert_eq!(imported_index.authorize_typos(&index_rtxn).unwrap(), Some(false));
-        assert_eq!(imported_index.min_word_len_one_typo(&index_rtxn).unwrap(), Some(6));
-        assert_eq!(imported_index.min_word_len_two_typos(&index_rtxn).unwrap(), Some(10));
+        // Corrected assertions: getters return T, not Option<T>
+        assert_eq!(imported_index.authorize_typos(&index_rtxn).unwrap(), false);
+        assert_eq!(imported_index.min_word_len_one_typo(&index_rtxn).unwrap(), 6);
+        assert_eq!(imported_index.min_word_len_two_typos(&index_rtxn).unwrap(), 10);
         // Convert Option<&fst::Set> to Option<BTreeSet<String>> for comparison
         let actual_exact_words: Option<BTreeSet<String>> = imported_index.exact_words(&index_rtxn).unwrap().map(|fst_set| {
-            fst_set.stream().into_str_vec().unwrap().into_iter().collect()
+            fst_set.stream().into_strs().unwrap().into_iter().collect() // Use into_strs()
         });
         assert_eq!(actual_exact_words, Some(BTreeSet::from(["exact".to_string()])));
         // Convert Vec<&str> to HashSet<String> for comparison
