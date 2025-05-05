@@ -360,22 +360,18 @@ impl IndexScheduler {
                 task.status = Status::Succeeded;
                 Ok((vec![task], ProcessBatchInfo::default()))
             }
-            Batch::SingleIndexSnapshotCreation { task } => self // Remove `mut`
+            Batch::SingleIndexSnapshotCreation { task } => self
                 .process_single_index_snapshot_creation(progress, task)
                 .map(|task| (vec![task], ProcessBatchInfo::default())),
-            // [meilisearchfj] Add case for snapshot import batch
-            Batch::SingleIndexSnapshotImport {
-                source_snapshot_path,
-                target_index_uid,
-                task,
-            } => self // Ensure 'self' is used correctly here
-                .process_single_index_snapshot_import( // Ensure method name matches definition
+            Batch::SingleIndexSnapshotImport { source_snapshot_path, target_index_uid, task } => {
+                self.process_single_index_snapshot_import(
                     progress,
                     task,
                     source_snapshot_path,
                     target_index_uid,
                 )
-                .map(|task| (vec![task], ProcessBatchInfo::default())),
+                .map(|task| (vec![task], ProcessBatchInfo::default()))
+            }
             Batch::UpgradeDatabase { mut tasks } => {
                 let KindWithContent::UpgradeDatabase { from } = tasks.last().unwrap().kind else {
                     unreachable!();
@@ -799,29 +795,35 @@ impl IndexScheduler {
         Ok(task)
     }
 
-    // [meilisearchfj] Re-add method definition for snapshot import processing
-    #[tracing::instrument(level = "trace", skip(self, _progress, task), target = "indexing::scheduler")] // Ensure progress is prefixed
+    #[tracing::instrument(level = "trace", skip(self, _progress, task), target = "indexing::scheduler")]
     fn process_single_index_snapshot_import(
         &self,
-        _progress: Progress, // Ensure progress is prefixed
+        _progress: Progress,
         mut task: Task,
-        source_snapshot_path: String, // Pass ownership
-        target_index_uid: String,   // Pass ownership
+        source_snapshot_path: String,
+        target_index_uid: String,
     ) -> Result<Task> {
-        // Wrap the core import and settings application logic in a closure
-        // to easily handle errors and update the task status.
-        // TODO: Add progress reporting steps (Step 7)
         let import_and_settings_result: Result<()> = (|| {
-            let snapshot_path = PathBuf::from(&source_snapshot_path); // Borrow path for IndexMapper
+            let snapshot_path = PathBuf::from(&source_snapshot_path);
 
             // 1. Call IndexMapper to import the index data
             let (imported_index, parsed_metadata) = self
                 .index_mapper
-                .fj_import_index_from_snapshot(&target_index_uid, &snapshot_path)?;
+                .fj_import_index_from_snapshot(&target_index_uid, &snapshot_path)
+                .map_err(|e| Error::SnapshotImportFailed {
+                    target_index_uid: target_index_uid.clone(),
+                    source: Box::new(e),
+                })?;
 
             // 2. Apply settings from the snapshot metadata
             let mut index_wtxn = imported_index.write_txn().map_err(|e| {
-                Error::from_milli(e.into(), Some(target_index_uid.to_string()))
+                Error::SnapshotImportFailed {
+                    target_index_uid: target_index_uid.clone(),
+                    source: Box::new(Error::from_milli(
+                        e.into(),
+                        Some(target_index_uid.to_string()),
+                    )),
+                }
             })?;
 
             let mut settings_builder = milli::update::Settings::new(
@@ -830,59 +832,56 @@ impl IndexScheduler {
                 self.indexer_config(),
             );
 
-            // Apply all settings from the parsed metadata
-            // Call individual setters based on parsed_metadata.settings
-            // Assuming parsed_metadata.settings is Settings<Unchecked>
             let settings = parsed_metadata.settings;
-            // Use correct method names from milli::update::Settings
-            if let Setting::Set(val) = settings.displayed_attributes.deref() { settings_builder.set_displayed_fields(val.clone()); } // Explicitly deref WildcardSetting
-            if let Setting::Set(val) = settings.searchable_attributes.deref() { settings_builder.set_searchable_fields(val.clone()); } // Explicitly deref WildcardSetting
-            if let Setting::Set(val) = settings.filterable_attributes { settings_builder.set_filterable_fields(val); } // Use correct method name
+            // Apply settings using individual setters
+            if let Setting::Set(val) = settings.displayed_attributes.deref() { settings_builder.set_displayed_fields(val.clone()); }
+            if let Setting::Set(val) = settings.searchable_attributes.deref() { settings_builder.set_searchable_fields(val.clone()); }
+            if let Setting::Set(val) = settings.filterable_attributes { settings_builder.set_filterable_fields(val); }
             if let Setting::Set(val) = settings.sortable_attributes { settings_builder.set_sortable_fields(val.into_iter().collect()); }
             if let Setting::Set(val) = settings.ranking_rules { settings_builder.set_criteria(val.into_iter().map(|r| r.into()).collect()); }
             if let Setting::Set(val) = settings.stop_words { settings_builder.set_stop_words(val); }
             if let Setting::Set(val) = settings.synonyms { settings_builder.set_synonyms(val); }
             if let Setting::Set(val) = settings.distinct_attribute { settings_builder.set_distinct_field(val); }
-            // Typo Tolerance Settings
             if let Setting::Set(typo_settings) = settings.typo_tolerance {
                 if let Setting::Set(val) = typo_settings.enabled { settings_builder.set_autorize_typos(val); }
-                // Access fields inside the MinWordSizeTyposSetting struct
                 if let Setting::Set(min_word_size) = typo_settings.min_word_size_for_typos {
                     if let Setting::Set(val) = min_word_size.one_typo { settings_builder.set_min_word_len_one_typo(val); }
                     if let Setting::Set(val) = min_word_size.two_typos { settings_builder.set_min_word_len_two_typos(val); }
                 }
                 if let Setting::Set(val) = typo_settings.disable_on_words { settings_builder.set_exact_words(val); }
-                if let Setting::Set(val) = typo_settings.disable_on_attributes { settings_builder.set_exact_attributes(val.into_iter().collect()); } // Convert BTreeSet to HashSet
+                if let Setting::Set(val) = typo_settings.disable_on_attributes { settings_builder.set_exact_attributes(val.into_iter().collect()); }
             }
-            // Faceting Settings
             if let Setting::Set(faceting_settings) = settings.faceting {
                 if let Setting::Set(val) = faceting_settings.max_values_per_facet { settings_builder.set_max_values_per_facet(val); }
                 if let Setting::Set(val) = faceting_settings.sort_facet_values_by {
-                    // Manual conversion from types::OrderByMap to milli::OrderByMap
                     let milli_order_by_map = val.into_iter().map(|(k, v)| (k, v.into())).collect();
-                    settings_builder.set_sort_facet_values_by(OrderByMap::from(milli_order_by_map)); // Use imported OrderByMap
+                    settings_builder.set_sort_facet_values_by(OrderByMap::from(milli_order_by_map));
                 }
             }
-            // Pagination Settings
             if let Setting::Set(pagination_settings) = settings.pagination {
                 if let Setting::Set(val) = pagination_settings.max_total_hits { settings_builder.set_pagination_max_total_hits(val); }
             }
             if let Setting::Set(val) = settings.proximity_precision { settings_builder.set_proximity_precision(val.into()); }
-            // Embedder Settings
             if let Setting::Set(embedders) = settings.embedders {
                 let converted_embedders = fj_convert_embedder_settings(embedders)?;
                 settings_builder.set_embedder_settings(converted_embedders);
             }
             // Add other settings as needed...
 
-            // Execute settings application
             let must_stop_processing = self.scheduler.must_stop_processing.clone();
             settings_builder
-                .execute(|_| {}, || must_stop_processing.get()) // No detailed progress for now
-                .map_err(|e| Error::from_milli(e, Some(target_index_uid.to_string())))?;
+                .execute(|_| {}, || must_stop_processing.get())
+                .map_err(|e| Error::SnapshotImportFailed {
+                    target_index_uid: target_index_uid.clone(),
+                    source: Box::new(Error::from_milli(e, Some(target_index_uid.to_string()))),
+                })?;
 
-            index_wtxn.commit().map_err(|e| {
-                Error::from_milli(e.into(), Some(target_index_uid.to_string()))
+            index_wtxn.commit().map_err(|e| Error::SnapshotImportFailed {
+                target_index_uid: target_index_uid.clone(),
+                source: Box::new(Error::from_milli(
+                    e.into(),
+                    Some(target_index_uid.to_string()),
+                )),
             })?;
 
             Ok(())
@@ -891,25 +890,23 @@ impl IndexScheduler {
         // 3. Update task status based on the result
         match import_and_settings_result {
             Ok(_) => {
-                // Extract source UID from path for details
                 let source_snapshot_uid = PathBuf::from(&source_snapshot_path)
                     .file_stem()
                     .and_then(|s| s.to_str())
                     .map(|s| s.split_once('-').map(|(_, uid)| uid).unwrap_or(s))
-                    .unwrap_or(&source_snapshot_path) // Use full path as fallback
+                    .unwrap_or(&source_snapshot_path)
                     .to_string();
 
                 task.details = Some(Details::SingleIndexSnapshotImport {
                     source_snapshot_uid,
-                    target_index_uid, // Use owned target_index_uid
+                    target_index_uid,
                 });
                 task.status = Status::Succeeded;
-                task.error = None; // Clear any previous error if retrying
+                task.error = None;
             }
             Err(e) => {
                 task.status = Status::Failed;
                 task.error = Some(e.into());
-                // Ensure details reflect failure
                 task.details = task.kind.default_details().map(|d| d.to_failed());
             }
         }
