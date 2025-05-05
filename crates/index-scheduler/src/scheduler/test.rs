@@ -1474,9 +1474,9 @@ mod msfj_sis_scheduler_import_tests {
         use milli::LocalizedAttributesRule;
         use milli::order_by_map::OrderByMap; // Added import
         use milli::OrderBy; // Added import
-        use milli::AttributePatterns; // Added import for E0308 fix
-        // Corrected Language import path - Assuming it's under milli::lang
-        use milli::lang::Language;
+        // Removed unused AttributePatterns import
+        // Corrected Language import path - Assuming it's re-exported under tokenizer
+        use milli::tokenizer::Language;
         use std::collections::{BTreeMap, BTreeSet, HashSet};
         use std::str::FromStr; // Keep FromStr for Language parsing
 
@@ -1528,8 +1528,8 @@ mod msfj_sis_scheduler_import_tests {
         settings.set_dictionary(BTreeSet::from(["wordA".to_string(), "wordB".to_string()]));
         settings.set_search_cutoff(100);
         // DIAGNOSE: Check the type of PrefixSearch being constructed
-        // Corrected PrefixSearch construction (try Enabled variant again)
-        let prefix_search_value = dbg!(PrefixSearch::Enabled { min_prefix_length: 3 });
+        // Corrected PrefixSearch construction (use IndexingTime variant)
+        let prefix_search_value = dbg!(PrefixSearch::IndexingTime);
         settings.set_prefix_search(prefix_search_value); // Use imported milli::index::PrefixSearch
         settings.set_facet_search(FacetSearchSettings { enabled: true, max_candidates: 10 }); // Use imported FacetSearchSettings
 
@@ -1566,8 +1566,8 @@ mod msfj_sis_scheduler_import_tests {
         assert!(task.error.is_none());
 
         assert!(index_scheduler.index_exists(target_index).unwrap());
-        // Remove explicit type annotation, let compiler infer
-        let imported_index = index_scheduler.index(target_index).unwrap();
+        // Re-add explicit type annotation to diagnose assignment
+        let imported_index: milli::Index = index_scheduler.index(target_index).unwrap();
         // DIAGNOSE: Check the type of imported_index - REMOVED due to E0277
         // dbg!(&imported_index);
         let index_rtxn = imported_index.read_txn().unwrap();
@@ -1635,9 +1635,9 @@ mod msfj_sis_scheduler_import_tests {
         // Verify Prefix Search (Compare milli::index::PrefixSearch)
         let prefix_search = imported_index.prefix_search(&index_rtxn).unwrap();
         // DIAGNOSE: Check the type of expected_prefix_search
-        // Corrected expected_prefix_search construction (try Enabled variant again)
-        let expected_prefix_search = dbg!(PrefixSearch::Enabled { min_prefix_length: 3 }); // Use milli::index::PrefixSearch::Enabled
-        assert_eq!(prefix_search, expected_prefix_search);
+        // Corrected expected_prefix_search construction (use IndexingTime variant)
+        let expected_prefix_search = dbg!(PrefixSearch::IndexingTime); // Use milli::index::PrefixSearch::IndexingTime
+        assert_eq!(prefix_search, Some(expected_prefix_search)); // Getter returns Option
 
         // Verify Facet Search
         let facet_search = imported_index.facet_search(&index_rtxn).unwrap();
