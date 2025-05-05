@@ -1465,15 +1465,19 @@ mod msfj_sis_scheduler_import_tests {
         // Let's try importing the parent and see what the compiler suggests for facet
         // use meilisearch_types::settings; // Keep this commented unless needed
 
-        use meilisearch_types::settings::facet::{FacetSearchSettings, OrderByType}; // Correct path
-        use meilisearch_types::settings::PrefixSearchSettings;
-        // Removed unused: FacetingSettings, MinWordSizeForTypos, PaginationSettings, TypoToleranceSettings
+        // Corrected facet import path
+        use meilisearch_types::settings::{FacetSearchSettings, OrderByType};
+        // Removed unused: PrefixSearchSettings, FacetingSettings, MinWordSizeForTypos, PaginationSettings, TypoToleranceSettings
         use milli::index::PrefixSearch; // Correct path
         use milli::proximity::ProximityPrecision; // Correct path
-        use milli::update::settings::LocalizedAttributesRule; // Correct path
+        // Corrected LocalizedAttributesRule import path
+        use milli::update::LocalizedAttributesRule;
         use milli::order_by_map::OrderByMap; // Added import
         use milli::OrderBy; // Added import
+        use milli::AttributePatterns; // Added import for E0308 fix
+        use milli::locale::Locale; // Added import for E0308 fix
         use std::collections::{BTreeMap, BTreeSet, HashSet};
+        use std::str::FromStr; // Added for Locale parsing
 
         let (index_scheduler, mut handle) = IndexScheduler::test(true, vec![]);
         let source_index = "source_index_all_settings";
@@ -1505,7 +1509,8 @@ mod msfj_sis_scheduler_import_tests {
         // dbg!(milli::OrderBy::*); // This won't compile, let's check the type itself
         // Let's try using a known variant if available, or check definition
         // sort_facet_values_by.insert("size".to_string(), dbg!(milli::OrderBy::Asc)); // Example check
-        sort_facet_values_by.insert("size".to_string(), OrderBy::Desc); // Use imported OrderBy
+        // Corrected OrderBy variant usage
+        sort_facet_values_by.insert("size".to_string(), OrderBy::Desc);
         settings.set_sort_facet_values_by(OrderByMap::from(sort_facet_values_by)); // Use imported OrderByMap
 
         settings.set_pagination_max_total_hits(500);
@@ -1522,7 +1527,8 @@ mod msfj_sis_scheduler_import_tests {
         settings.set_dictionary(BTreeSet::from(["wordA".to_string(), "wordB".to_string()]));
         settings.set_search_cutoff(100);
         // DIAGNOSE: Check the type of PrefixSearch being constructed
-        let prefix_search_value = dbg!(PrefixSearch { enabled: true, min_prefix_length: 3 });
+        // Corrected PrefixSearch construction (assuming Enabled variant)
+        let prefix_search_value = dbg!(PrefixSearch::Enabled { min_prefix_length: 3 });
         settings.set_prefix_search(prefix_search_value); // Use imported milli::index::PrefixSearch
         settings.set_facet_search(FacetSearchSettings { enabled: true, max_candidates: 10 }); // Use imported FacetSearchSettings
 
@@ -1560,8 +1566,8 @@ mod msfj_sis_scheduler_import_tests {
 
         assert!(index_scheduler.index_exists(target_index).unwrap());
         let imported_index = index_scheduler.index(target_index).unwrap();
-        // DIAGNOSE: Check the type of imported_index
-        dbg!(&imported_index);
+        // DIAGNOSE: Check the type of imported_index - REMOVED due to E0277
+        // dbg!(&imported_index);
         let index_rtxn = imported_index.read_txn().unwrap();
 
         // Verify Typo Tolerance
@@ -1590,40 +1596,34 @@ mod msfj_sis_scheduler_import_tests {
         // Verify Proximity Precision
         // DIAGNOSE: Check the return type of proximity_precision
         let proximity = dbg!(imported_index.proximity_precision(&index_rtxn)).unwrap();
-        assert_eq!(proximity, ProximityPrecision::ByWord);
+        // Corrected proximity assertion (wrap in Some)
+        assert_eq!(proximity, Some(ProximityPrecision::ByWord));
 
         // Verify Localized Attributes
         // DIAGNOSE: Check the return type of localized_attributes_rules
         let localized = dbg!(imported_index.localized_attributes_rules(&index_rtxn)).unwrap();
         // DIAGNOSE: Check the definition/fields of LocalizedAttributesRuleView
         // We can't dbg! the struct definition directly, but let's check the constructed value
-        let expected_localized = dbg!(vec![LocalizedAttributesRuleView {
-            attribute_patterns: vec!["title#fr".to_string()], // Check this type
-            locales: vec!["title".to_string()], // Check this type
+        // Corrected construction of expected_localized
+        let expected_localized_view = dbg!(vec![LocalizedAttributesRuleView {
+            attribute_patterns: AttributePatterns::new(vec!["title#fr".to_string()]), // Use AttributePatterns::new
+            locales: vec![Locale::from_str("title").unwrap()], // Use Locale::from_str
         }]);
-        assert_eq!(localized, expected_localized);
+        // Corrected assertion for localized attributes
+        let expected_localized_milli: Vec<LocalizedAttributesRule> = expected_localized_view.into_iter().map(|v| v.into()).collect();
+        assert_eq!(localized, Some(expected_localized_milli));
+
 
         // Verify Tokenization Settings (Handle Option<&BTreeSet>)
         let expected_separators = BTreeSet::from(["&".to_string()]);
-        // DIAGNOSE: Check the type collected into BTreeSet and if deref is valid
-        let collected_separators = dbg!(expected_separators.iter().collect::<BTreeSet<_>>());
-        // assert_eq!(imported_index.separator_tokens(&index_rtxn).unwrap(), Some(collected_separators.deref())); // Compare Option<&BTreeSet>
-        // TEMPORARY: Use as_ref() instead of deref() for diagnosis
-        assert_eq!(imported_index.separator_tokens(&index_rtxn).unwrap(), Some(collected_separators.iter().collect::<BTreeSet<_>>().as_ref()));
+        // Corrected tokenization assertions (compare Option<&BTreeSet<String>>)
+        assert_eq!(imported_index.separator_tokens(&index_rtxn).unwrap(), Some(&expected_separators));
 
         let expected_non_separators = BTreeSet::from(["#".to_string()]);
-        // DIAGNOSE: Check the type collected into BTreeSet and if deref is valid
-        let collected_non_separators = dbg!(expected_non_separators.iter().collect::<BTreeSet<_>>());
-        // assert_eq!(imported_index.non_separator_tokens(&index_rtxn).unwrap(), Some(collected_non_separators.deref())); // Compare Option<&BTreeSet>
-        // TEMPORARY: Use as_ref() instead of deref() for diagnosis
-        assert_eq!(imported_index.non_separator_tokens(&index_rtxn).unwrap(), Some(collected_non_separators.iter().collect::<BTreeSet<_>>().as_ref()));
+        assert_eq!(imported_index.non_separator_tokens(&index_rtxn).unwrap(), Some(&expected_non_separators));
 
         let expected_dictionary = BTreeSet::from(["wordA".to_string(), "wordB".to_string()]);
-        // DIAGNOSE: Check the type collected into BTreeSet and if deref is valid
-        let collected_dictionary = dbg!(expected_dictionary.iter().collect::<BTreeSet<_>>());
-        // assert_eq!(imported_index.dictionary(&index_rtxn).unwrap(), Some(collected_dictionary.deref())); // Compare Option<&BTreeSet>
-        // TEMPORARY: Use as_ref() instead of deref() for diagnosis
-        assert_eq!(imported_index.dictionary(&index_rtxn).unwrap(), Some(collected_dictionary.iter().collect::<BTreeSet<_>>().as_ref()));
+        assert_eq!(imported_index.dictionary(&index_rtxn).unwrap(), Some(&expected_dictionary));
 
 
         // Verify Search Cutoff
@@ -1632,7 +1632,8 @@ mod msfj_sis_scheduler_import_tests {
         // Verify Prefix Search (Compare milli::index::PrefixSearch)
         let prefix_search = imported_index.prefix_search(&index_rtxn).unwrap();
         // DIAGNOSE: Check the type of expected_prefix_search
-        let expected_prefix_search = dbg!(PrefixSearch { enabled: true, min_prefix_length: 3 }); // Use milli::index::PrefixSearch
+        // Corrected expected_prefix_search construction
+        let expected_prefix_search = dbg!(PrefixSearch::Enabled { min_prefix_length: 3 }); // Use milli::index::PrefixSearch::Enabled
         assert_eq!(prefix_search, expected_prefix_search);
 
         // Verify Facet Search
