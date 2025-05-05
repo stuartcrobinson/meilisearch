@@ -31,3 +31,13 @@
 *   **Symptom**: `assert_eq!` fails comparing `PromptData`.
     *   **Cause**: `PromptData` struct (from `milli/src/prompt/mod.rs`) does not implement `PartialEq`.
     *   **Fix**: Compare the fields (`template`, `max_bytes`) individually in the assertion.
+
+*   **Snapshot UID Mismatches in Tests**
+    *   **Symptom**: `assert_eq!` fails comparing snapshot UIDs in import tests (e.g., `test_import_snapshot_happy_path`, `test_e2e_snapshot_create_import_verify`).
+    *   **Cause**: Inconsistent extraction/construction of the UID between the task processing logic (`process_batch.rs`) and the test assertions (`scheduler/test.rs`). The processing logic might store the full UUID, while the test expects a partial one or includes extra parts like `.snapshot.tar`.
+    *   **Fix**: Ensure both the processing logic and the test assertion extract/construct the *same* representation of the UID (e.g., only the full UUID string) from the snapshot filename/path before comparison. Use string splitting (`split_once`, `split('.')`) carefully on the filename stem.
+
+*   **Snapshot File Path Assertion Failures**
+    *   **Symptom**: `assert!(snapshot_filepath.exists(), ...)` fails in snapshot creation tests (e.g., `test_create_index_snapshot_success`).
+    *   **Cause**: If the snapshot creation function's return type changes (e.g., from `String` UID to `PathBuf`), tests might incorrectly reconstruct the expected path using the old logic, leading to assertions on malformed paths.
+    *   **Fix**: Update tests to use the returned value (e.g., the `PathBuf`) directly in assertions and subsequent file operations, adapting to the new function signature.

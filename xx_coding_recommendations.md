@@ -8,3 +8,5 @@
 *   **`WildcardSetting` Construction**: `WildcardSetting` wraps `Setting<Vec<String>>`. Construct it using `Setting::Set(vec![...]).into()`, not `WildcardSetting::Set(...)`.
 *   **Ranking Rules**: Use `milli::Criterion` enum variants (e.g., `Criterion::Typo`) when building `Settings`. Convert to `RankingRuleView` using `.into()` where needed (e.g., for the `ranking_rules` field).
 *   **Collection Types**: Use the specific collection type expected (e.g., `BTreeSet` for `TypoSettings::disable_on_attributes`, not `HashSet`).
+*   **Snapshot UID Consistency**: When dealing with snapshot filenames (`{index_uid}-{uuid}.snapshot.tar.gz`), ensure consistent handling of the `uuid` part. Extract the full UUID when storing it (e.g., in task details) and use the full UUID when reconstructing filenames or comparing values. Avoid storing/comparing partial UUIDs or including extra filename parts unless necessary.
+*   **Function Return Value Changes**: When a function's return type changes (e.g., from `String` to `PathBuf`), update all call sites to handle the new type correctly, especially in tests that construct paths or perform assertions based on the returned value.
