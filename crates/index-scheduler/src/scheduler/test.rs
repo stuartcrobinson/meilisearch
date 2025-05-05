@@ -1593,7 +1593,8 @@ mod msfj_sis_scheduler_import_tests {
         assert_eq!(proximity, ProximityPrecision::ByWord);
 
         // Verify Localized Attributes
-        let localized = imported_index.localized_attributes_rules(&index_rtxn).unwrap();
+        // DIAGNOSE: Check the return type of localized_attributes_rules
+        let localized = dbg!(imported_index.localized_attributes_rules(&index_rtxn)).unwrap();
         // DIAGNOSE: Check the definition/fields of LocalizedAttributesRuleView
         // We can't dbg! the struct definition directly, but let's check the constructed value
         let expected_localized = dbg!(vec![LocalizedAttributesRuleView {
