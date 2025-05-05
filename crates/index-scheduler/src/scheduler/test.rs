@@ -947,11 +947,28 @@ fn create_and_list_index() {
 }
 
 // [meilisearchfj] Tests for Single Index Snapshot Import integration with the scheduler
-// Removed unused imports: SettingEmbeddingSettings, Kind
-use meilisearch_types::milli::vector::settings::{EmbedderSource, EmbeddingSettings};
-use tempfile::tempdir;
+#[cfg(test)] // Add cfg(test) annotation
+mod msfj_sis_scheduler_import_tests {
+    use super::*; // Keep import from parent
+    // Move necessary imports inside the module
+    use crate::test_utils::handle_tasks;
+    use meilisearch_types::milli::vector::settings::{EmbedderSource, EmbeddingSettings};
+    use meilisearch_types::settings::SettingEmbeddingSettings; // Restore this import
+    use meilisearch_types::tasks::KindWithContent;
+    use tempfile::tempdir;
+    use std::collections::{BTreeMap, HashSet}; // Import BTreeMap and HashSet
+    use big_s::S; // Import S
+    use std::path::PathBuf; // Import PathBuf
+    use std::fs::File; // Import File
+    use std::io::Write; // Import Write
+    use crate::{IndexScheduler, fj_snapshot_utils}; // Import IndexScheduler and fj_snapshot_utils
+    use crate::test_utils::index_creation_task; // Import index_creation_task
+    use meilisearch_types::tasks::{Details, Status}; // Import Details and Status
+    use meilisearch_types::settings::FilterableAttributesRule; // Import FilterableAttributesRule
+    use milli::update::Setting; // Import Setting
 
-// Helper to create a valid snapshot for import tests
+    // Helper to create a valid snapshot for import tests
+    // Moved inside the module
     fn create_test_snapshot(
         index_scheduler: &IndexScheduler,
         source_index_uid: &str,
