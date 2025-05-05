@@ -957,8 +957,7 @@ mod msfj_sis_scheduler_import_tests {
     use meilisearch_types::tasks::{Details, Status};
     use milli::FilterableAttributesRule;
     use milli::update::Setting;
-    // Import StatusCode from http crate
-    use http::StatusCode;
+    // Removed StatusCode import, will compare numeric values
 
     // Helper to create a valid snapshot for import tests
     // Moved inside the module
@@ -1151,9 +1150,9 @@ mod msfj_sis_scheduler_import_tests {
         let task = index_scheduler.queue.tasks.get_task(&rtxn, task_id).unwrap().unwrap();
         assert_eq!(task.status, Status::Failed);
         assert!(task.error.is_some());
-        // Check the public StatusCode field
-        let status_code = task.error.as_ref().unwrap().code;
-        assert_eq!(status_code, StatusCode::CONFLICT); // IndexAlreadyExists maps to CONFLICT
+        // Compare numeric status code
+        let status_code = task.error.as_ref().unwrap().code.as_u16();
+        assert_eq!(status_code, 409); // CONFLICT
         match task.details {
             Some(Details::SingleIndexSnapshotImport { .. }) => {} // Expected structure
             _ => panic!("Incorrect task details for failed import: {:?}", task.details),
@@ -1182,10 +1181,10 @@ mod msfj_sis_scheduler_import_tests {
         let task = index_scheduler.queue.tasks.get_task(&rtxn, task_id).unwrap().unwrap();
         assert_eq!(task.status, Status::Failed);
         assert!(task.error.is_some());
-        // Check the public StatusCode field
-        let status_code = task.error.as_ref().unwrap().code;
-        // InvalidSnapshotPath maps to BAD_REQUEST, SnapshotImportFailed maps to INTERNAL_SERVER_ERROR
-        assert!(matches!(status_code, StatusCode::BAD_REQUEST | StatusCode::INTERNAL_SERVER_ERROR));
+        // Compare numeric status code
+        let status_code = task.error.as_ref().unwrap().code.as_u16();
+        // InvalidSnapshotPath (400), SnapshotImportFailed (500)
+        assert!(matches!(status_code, 400 | 500));
     }
 
     #[test]
@@ -1215,10 +1214,10 @@ mod msfj_sis_scheduler_import_tests {
         let task = index_scheduler.queue.tasks.get_task(&rtxn, task_id).unwrap().unwrap();
         assert_eq!(task.status, Status::Failed);
         assert!(task.error.is_some());
-        // Check the public StatusCode field
-        let status_code = task.error.as_ref().unwrap().code;
-         // SnapshotImportFailed maps to INTERNAL_SERVER_ERROR
-        assert_eq!(status_code, StatusCode::INTERNAL_SERVER_ERROR);
+        // Compare numeric status code
+        let status_code = task.error.as_ref().unwrap().code.as_u16();
+         // SnapshotImportFailed (500)
+        assert_eq!(status_code, 500);
     }
 
      #[test]
@@ -1272,8 +1271,8 @@ mod msfj_sis_scheduler_import_tests {
         let task = index_scheduler.queue.tasks.get_task(&rtxn, task_id).unwrap().unwrap();
         assert_eq!(task.status, Status::Failed);
         assert!(task.error.is_some());
-        // Check the public StatusCode field
-        let status_code = task.error.as_ref().unwrap().code;
-        assert_eq!(status_code, StatusCode::BAD_REQUEST); // SnapshotVersionMismatch maps to BAD_REQUEST
+        // Compare numeric status code
+        let status_code = task.error.as_ref().unwrap().code.as_u16();
+        assert_eq!(status_code, 400); // SnapshotVersionMismatch (BAD_REQUEST)
     }
 }
