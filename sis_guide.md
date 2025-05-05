@@ -109,7 +109,7 @@ crates/index-scheduler/src/lib.rs
     cargo test -p index-scheduler -- tests::msfj_sis_snapshot_creation::msfj_sis_snapshot_creation_tests
     ```
 
-### 3b. Complete Metadata Retrieval and Testing (Deferred)
+### 3b. Complete Metadata Retrieval and Testing
 
 *   **Files**: `crates/index-scheduler/src/fj_snapshot_utils.rs`, `crates/index-scheduler/src/tests/msfj_sis_snapshot_creation.rs`.
 *   **Action**:
@@ -120,7 +120,7 @@ crates/index-scheduler/src/lib.rs
         *   Unpacking the snapshot.
         *   Deserializing `metadata.json`.
         *   Asserting that the corresponding fields in the deserialized `SnapshotMetadata` match the expected values.
-*   **Goal**: Ensure the `metadata.json` within the snapshot accurately and completely reflects *all* configurable settings of the source index as defined in the original Step 3 metadata specification.
+*   **Goal**: Ensure the `metadata.json` within the snapshot accurately and completely reflects *all* configurable settings of the source index as defined in the original Step 3 metadata specification. (Note: The E2E test in Step 8 verifies all settings are correctly applied *after* import, complementing the direct metadata verification here).
 *   **Step Completion Check**: Add the `cargo test` command here to run only the tests implemented for this step.
     ```
     cargo test -p index-scheduler -- tests::msfj_sis_snapshot_creation::msfj_sis_snapshot_creation_tests
@@ -290,10 +290,7 @@ Debugging:
 When debugging persistent test failures, avoid sequential trial-and-error fixes. Instead, adopt a broader diagnostic approach. Formulate multiple hypotheses for the root cause (e.g., path issues, permissions, resource lifecycles, library interactions). Instrument the code around the failure point with detailed logging, assertions, and contextual error messages (`map_err`) to pinpoint the exact failure location and state. Verify assumptions, like directory existence or file accessibility, just before the failing operation. This systematic approach helps identify the true cause, such as premature temporary file cleanup or incorrect path handling, more efficiently than isolated fixes.
 
 The key is to reduce assumptions and verify types and paths by looking directly at the relevant source code definitions and re-exports when compiler 
-errors become stubborn.                                                                                                                              
-
-
-TODO:  add a requirement that for each implementation step, we take a few steps to review everything newly written for for accuracy and reasonablenes and good software practices, and that it follows the rest of this sis_guide.md . and then double check that any before writing the tests and moving on
+errors become stubborn.
 
 NOTE:  when the AI agent interacts with the human, it should avoid pleasantries whenever possible.  no need for thank you. we want the conversation to be efficient and concise.
 
