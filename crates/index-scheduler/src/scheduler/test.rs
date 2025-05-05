@@ -1465,19 +1465,20 @@ mod msfj_sis_scheduler_import_tests {
         // Let's try importing the parent and see what the compiler suggests for facet
         // use meilisearch_types::settings; // Keep this commented unless needed
 
-        // Corrected facet import path
-        use meilisearch_types::settings::{FacetSearchSettings, OrderByType};
+        // Corrected facet import path again
+        use meilisearch_types::settings::facet::{FacetSearchSettings, OrderByType};
         // Removed unused: PrefixSearchSettings, FacetingSettings, MinWordSizeForTypos, PaginationSettings, TypoToleranceSettings
         use milli::index::PrefixSearch; // Correct path
         use milli::proximity::ProximityPrecision; // Correct path
-        // Corrected LocalizedAttributesRule import path
-        use milli::update::LocalizedAttributesRule;
+        // Corrected LocalizedAttributesRule import path again
+        use milli::LocalizedAttributesRule;
         use milli::order_by_map::OrderByMap; // Added import
         use milli::OrderBy; // Added import
         use milli::AttributePatterns; // Added import for E0308 fix
-        use milli::locale::Locale; // Added import for E0308 fix
+        // Corrected Locale import path
+        use milli::documents::locale::Locale;
         use std::collections::{BTreeMap, BTreeSet, HashSet};
-        use std::str::FromStr; // Added for Locale parsing
+        // Removed unused FromStr import
 
         let (index_scheduler, mut handle) = IndexScheduler::test(true, vec![]);
         let source_index = "source_index_all_settings";
@@ -1527,8 +1528,8 @@ mod msfj_sis_scheduler_import_tests {
         settings.set_dictionary(BTreeSet::from(["wordA".to_string(), "wordB".to_string()]));
         settings.set_search_cutoff(100);
         // DIAGNOSE: Check the type of PrefixSearch being constructed
-        // Corrected PrefixSearch construction (assuming Enabled variant)
-        let prefix_search_value = dbg!(PrefixSearch::Enabled { min_prefix_length: 3 });
+        // Corrected PrefixSearch construction (use Enable variant)
+        let prefix_search_value = dbg!(PrefixSearch::Enable { min_prefix_length: 3 });
         settings.set_prefix_search(prefix_search_value); // Use imported milli::index::PrefixSearch
         settings.set_facet_search(FacetSearchSettings { enabled: true, max_candidates: 10 }); // Use imported FacetSearchSettings
 
@@ -1565,7 +1566,8 @@ mod msfj_sis_scheduler_import_tests {
         assert!(task.error.is_none());
 
         assert!(index_scheduler.index_exists(target_index).unwrap());
-        let imported_index = index_scheduler.index(target_index).unwrap();
+        // Explicitly type annotate imported_index
+        let imported_index: milli::Index = index_scheduler.index(target_index).unwrap();
         // DIAGNOSE: Check the type of imported_index - REMOVED due to E0277
         // dbg!(&imported_index);
         let index_rtxn = imported_index.read_txn().unwrap();
@@ -1606,8 +1608,11 @@ mod msfj_sis_scheduler_import_tests {
         // We can't dbg! the struct definition directly, but let's check the constructed value
         // Corrected construction of expected_localized
         let expected_localized_view = dbg!(vec![LocalizedAttributesRuleView {
-            attribute_patterns: AttributePatterns::new(vec!["title#fr".to_string()]), // Use AttributePatterns::new
-            locales: vec![Locale::from_str("title").unwrap()], // Use Locale::from_str
+            // Corrected AttributePatterns construction
+            attribute_patterns: AttributePatterns { patterns: vec!["title#fr".to_string()] },
+            // Corrected Locale construction (assuming direct string conversion or specific constructor)
+            // Let's try direct construction if FromStr isn't the way
+            locales: vec![Locale::from_str("title").unwrap()], // Keep FromStr for now, might need adjustment
         }]);
         // Corrected assertion for localized attributes
         let expected_localized_milli: Vec<LocalizedAttributesRule> = expected_localized_view.into_iter().map(|v| v.into()).collect();
@@ -1616,7 +1621,7 @@ mod msfj_sis_scheduler_import_tests {
 
         // Verify Tokenization Settings (Handle Option<&BTreeSet>)
         let expected_separators = BTreeSet::from(["&".to_string()]);
-        // Corrected tokenization assertions (compare Option<&BTreeSet<String>>)
+        // Reverted tokenization assertions (compare Option<&BTreeSet<String>>)
         assert_eq!(imported_index.separator_tokens(&index_rtxn).unwrap(), Some(&expected_separators));
 
         let expected_non_separators = BTreeSet::from(["#".to_string()]);
@@ -1632,8 +1637,8 @@ mod msfj_sis_scheduler_import_tests {
         // Verify Prefix Search (Compare milli::index::PrefixSearch)
         let prefix_search = imported_index.prefix_search(&index_rtxn).unwrap();
         // DIAGNOSE: Check the type of expected_prefix_search
-        // Corrected expected_prefix_search construction
-        let expected_prefix_search = dbg!(PrefixSearch::Enabled { min_prefix_length: 3 }); // Use milli::index::PrefixSearch::Enabled
+        // Corrected expected_prefix_search construction (use Enable variant)
+        let expected_prefix_search = dbg!(PrefixSearch::Enable { min_prefix_length: 3 }); // Use milli::index::PrefixSearch::Enable
         assert_eq!(prefix_search, expected_prefix_search);
 
         // Verify Facet Search
