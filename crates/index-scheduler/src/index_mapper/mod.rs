@@ -651,7 +651,7 @@ impl IndexMapper {
             });
         }
         tracing::trace!(target: "snapshot_import", "Target index '{}' does not exist.", target_index_uid);
-        }
+        // } <-- Removed extra closing brace
         drop(rtxn); // Release read transaction before potential writes
 
         // 2. Unpack & Validate Snapshot
