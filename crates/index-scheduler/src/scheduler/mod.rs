@@ -320,9 +320,13 @@ impl IndexScheduler {
                     );
                     stop_scheduler_forever = true;
                 }
-                let error: ResponseError = err.clone().into(); // Clone err before converting
+                // Construct ResponseError manually using from_msg, as Error is not Clone.
+                let response_error = ResponseError::from_msg(
+                    err.to_string(), // Use the Display impl of the original error
+                    err.error_code(), // Use the ErrorCode impl of the original error
+                );
                 // [meilisearchfj] DIAGNOSTIC: Log the generated ResponseError's status code
-                tracing::error!(target: "indexing::scheduler", error_type = %err, status_code = %error.code.as_u16(), "Generating ResponseError for failed batch.");
+                tracing::error!(target: "indexing::scheduler", error_type = %err, status_code = %response_error.code.as_u16(), "Generating ResponseError for failed batch.");
                 for id in ids.iter() {
                     task_progress.fetch_add(1, Ordering::Relaxed);
                     let mut task = self
@@ -332,7 +336,8 @@ impl IndexScheduler {
                         .map_err(|e| Error::UnrecoverableError(Box::new(e)))?
                         .ok_or(Error::CorruptedTaskQueue)?;
                     task.status = Status::Failed;
-                    task.error = Some(error.clone());
+                    // Store the manually constructed response_error
+                    task.error = Some(response_error.clone()); // Clone the ResponseError for each task
                     task.details = task.details.map(|d| d.to_failed());
                     processing_batch.update(&mut task);
 
@@ -341,7 +346,8 @@ impl IndexScheduler {
                         crate::test_utils::FailureLocation::UpdatingTaskAfterProcessBatchFailure,
                     )?;
 
-                    tracing::error!("Batch failed {}", error);
+                    // Log the manually constructed response_error
+                    tracing::error!("Batch failed {}", response_error);
 
                     self.queue
                         .tasks
