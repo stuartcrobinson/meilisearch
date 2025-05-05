@@ -1510,8 +1510,8 @@ mod msfj_sis_scheduler_import_tests {
         // dbg!(milli::OrderBy::*); // This won't compile, let's check the type itself
         // Let's try using a known variant if available, or check definition
         // sort_facet_values_by.insert("size".to_string(), dbg!(milli::OrderBy::Asc)); // Example check
-        // Assuming OrderBy::Desc exists, keep as is for now
-        sort_facet_values_by.insert("size".to_string(), OrderBy::Desc);
+        // Correct OrderBy variant usage (use Count to match assertion)
+        sort_facet_values_by.insert("size".to_string(), OrderBy::Count);
         settings.set_sort_facet_values_by(OrderByMap::from(sort_facet_values_by)); // Use imported OrderByMap
 
         settings.set_pagination_max_total_hits(500);
