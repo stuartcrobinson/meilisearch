@@ -1032,7 +1032,9 @@ mod msfj_sis_scheduler_import_tests {
         assert!(task.error.is_none());
         match task.details {
             Some(Details::SingleIndexSnapshotImport { source_snapshot_uid, target_index_uid }) => {
-                assert_eq!(source_snapshot_uid, format!("{}-test", source_index)); // Check UID extraction
+                // Extract the expected UID from the filename used during creation
+                let expected_uid = snapshot_path.file_stem().unwrap().to_str().unwrap();
+                assert_eq!(source_snapshot_uid, expected_uid);
                 assert_eq!(target_index_uid, target_index);
             }
             _ => panic!("Incorrect task details: {:?}", task.details),
