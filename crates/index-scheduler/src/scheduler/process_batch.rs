@@ -725,7 +725,8 @@ impl IndexScheduler {
         // TODO: Add specific progress steps for snapshot creation if needed (Step 7)
         // progress.update_progress(SingleIndexSnapshotCreationProgress::Starting);
 
-        let snapshot_result: Result<String, Error> = (|| {
+        // Expect PathBuf from the closure now
+        let snapshot_result: Result<PathBuf, Error> = (|| {
             // Get the index handle using the main scheduler env
             let index = {
                 let rtxn = self.env.read_txn()?;
@@ -757,14 +758,26 @@ impl IndexScheduler {
                 source: Box::new(e),
             })?;
 
-            Ok(snapshot_uid)
+            // Return the full path on success
+            Ok(snapshot_path)
         })();
 
         // Always release the lock, regardless of success or failure
         self.index_mapper.set_currently_updating_index(None);
 
         match snapshot_result {
-            Ok(snapshot_uid) => {
+            Ok(snapshot_path) => {
+                // Extract the UID from the filename for the details
+                let snapshot_uid = snapshot_path
+                    .file_stem()
+                    .and_then(|s| s.to_str())
+                    .and_then(|s| s.split_once('-').map(|(_, uid)| uid.to_string()))
+                    .unwrap_or_else(|| {
+                        // Fallback if filename format is unexpected, though it shouldn't happen
+                        tracing::warn!("Could not extract snapshot UID from filename: {:?}", snapshot_path);
+                        "unknown".to_string()
+                    });
+
                 task.status = Status::Succeeded;
                 if let Some(Details::SingleIndexSnapshotCreation { snapshot_uid: details_uid }) =
                     &mut task.details

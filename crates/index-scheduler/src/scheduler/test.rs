@@ -964,7 +964,7 @@ mod msfj_sis_scheduler_import_tests {
         index_scheduler: &IndexScheduler,
         handle: &mut crate::test_utils::IndexSchedulerHandle, // Add handle parameter
         source_index_uid: &str,
-        target_snapshot_name: &str,
+        // Remove unused target_snapshot_name: &str,
     ) -> PathBuf {
         // Initialize tracing subscriber for this test if not already done
         // This helps ensure logs are printed during test execution.
