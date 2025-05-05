@@ -942,7 +942,7 @@ mod msfj_sis_scheduler_import_tests {
     use super::*; // Keep import from parent
     // Move necessary imports inside the module
     // Use crate::test_utils path
-    use crate::test_utils::{handle_tasks, TempIndex};
+    // Removed unused import: handle_tasks, TempIndex
     use meilisearch_types::milli::vector::settings::{EmbedderSource, EmbeddingSettings};
     // Removed unused import: SettingEmbeddingSettings
     use meilisearch_types::tasks::KindWithContent;
@@ -1112,9 +1112,13 @@ mod msfj_sis_scheduler_import_tests {
         assert_eq!(imported_embedders.len(), 1);
         assert!(imported_embedders.iter().any(|c| c.name == "default"));
         let config = imported_embedders.iter().find(|c| c.name == "default").unwrap();
-        // Check dimensions via embedder_options. Remove source check for now.
-        // assert!(matches!(config.config.embedder_options.source, EmbedderSource::UserProvided)); // Cannot check source easily
-        assert_eq!(config.config.embedder_options.dimensions, Some(1));
+        // Check dimensions via embedder_options.
+        assert_eq!(config.config.embedder_options.dimensions.as_ref().unwrap(), &1);
+        // Check source via embedder_options.
+        assert!(matches!(
+            config.config.embedder_options.source,
+            Setting::Set(EmbedderSource::UserProvided)
+        ));
     }
 
     #[test]
