@@ -631,7 +631,9 @@ impl IndexMapper {
         target_index_uid: &str,
         snapshot_path: &Path,
     ) -> Result<(Index, FjParsedSnapshotMetadata)> {
+        tracing::trace!(target: "snapshot_import", "Starting import: target='{}', snapshot='{}'", target_index_uid, snapshot_path.display());
         // 1. Validate Request & Path
+        tracing::trace!(target: "snapshot_import", "Validating snapshot path...");
         // [meilisearchfj] Use configured snapshots_path
         if !snapshot_path.starts_with(&self.snapshots_path) || !snapshot_path.exists() {
             return Err(Error::InvalidSnapshotPath { path: snapshot_path.to_path_buf() });
@@ -664,18 +666,23 @@ impl IndexMapper {
             .prefix("tmp_snapshot_import_")
             .tempdir_in(temp_dir_base)?;
 
+        tracing::trace!(target: "snapshot_import", "Unpacking snapshot to temp dir: {:?}", temp_dir.path());
         let snapshot_file = fs::File::open(snapshot_path)?;
         let mut archive = tar::Archive::new(flate2::read::GzDecoder::new(snapshot_file));
         archive.unpack(temp_dir.path())?;
+        tracing::trace!(target: "snapshot_import", "Snapshot unpacked.");
 
         let data_mdb_path = temp_dir.path().join("data.mdb");
         let metadata_path = temp_dir.path().join("metadata.json");
 
         if !data_mdb_path.exists() || !metadata_path.exists() {
+            tracing::error!(target: "snapshot_import", "data.mdb or metadata.json missing in snapshot.");
             return Err(Error::InvalidSnapshotFormat { path: snapshot_path.to_path_buf() });
         }
 
+        tracing::trace!(target: "snapshot_import", "Snapshot format validated (data.mdb, metadata.json exist).");
         // 3. Parse Metadata & Version Check
+        tracing::trace!(target: "snapshot_import", "Parsing metadata.json...");
         let metadata_file = fs::File::open(&metadata_path)?;
         let metadata: FjParsedSnapshotMetadata = serde_json::from_reader(metadata_file)
             .map_err(|_e| Error::InvalidSnapshotFormat { path: snapshot_path.to_path_buf() })?; // Prefix unused 'e'
@@ -737,15 +744,18 @@ impl IndexMapper {
             });
         }
 
-        tracing::info!(target: "snapshot_import", "Version Check Passed."); // Log success
+        tracing::info!(target: "snapshot_import", "Version Check Passed.");
 
         // 4. Prepare Index Directory & Data
         let new_uuid = Uuid::new_v4();
         let index_path = self.base_path.join(new_uuid.to_string());
+        tracing::trace!(target: "snapshot_import", "Preparing index directory: {:?}", index_path);
         fs::create_dir_all(&index_path)?;
         fs::rename(data_mdb_path, index_path.join("data.mdb"))?; // Move data.mdb
+        tracing::trace!(target: "snapshot_import", "Moved data.mdb to index directory.");
 
         // 5. Register, Open, and Map Index
+        tracing::trace!(target: "snapshot_import", "Opening imported index LMDB environment at {:?}...", index_path);
         // [meilisearchfj] Use self.env for transaction
         let mut wtxn = self.env.write_txn()?;
         let mut index_map = self.index_map.write().unwrap(); // Lock the index map
@@ -766,8 +776,10 @@ impl IndexMapper {
             false, // `creation` is false because we are importing existing data
         )
         .map_err(|e| Error::from_milli(e, Some(target_index_uid.to_string())))?;
+        tracing::trace!(target: "snapshot_import", "Opened imported index LMDB environment.");
 
         // Update the mapping table
+        tracing::trace!(target: "snapshot_import", "Updating index mapping: '{}' -> {}", target_index_uid, new_uuid);
         self.index_mapping.put(&mut wtxn, target_index_uid, &new_uuid)?;
 
         // [meilisearchfj] Use the new method to insert the already opened index
@@ -778,9 +790,11 @@ impl IndexMapper {
             self.enable_mdb_writemap,
         );
 
+        tracing::trace!(target: "snapshot_import", "Inserted index into IndexMap cache.");
         // Handle potential eviction
         // Use the full path to InsertionOutcome::Evicted
         if let crate::lru::InsertionOutcome::Evicted(evicted_uuid, evicted_index) = outcome {
+            tracing::trace!(target: "snapshot_import", "Index {} evicted from cache due to import.", evicted_uuid);
             // Use the public method specifically for closing evicted indexes
             index_map.fj_close_evicted_index(evicted_uuid, evicted_index, self.enable_mdb_writemap);
         }
@@ -793,15 +807,20 @@ impl IndexMapper {
         let index_rtxn = index.read_txn()?;
         let stats = crate::index_mapper::IndexStats::new(&index, &index_rtxn)
             .map_err(|e| Error::from_milli(e, Some(target_index_uid.to_string())))?;
+        tracing::trace!(target: "snapshot_import", "Storing initial stats for imported index {}.", new_uuid);
         self.index_stats.put(&mut wtxn, &new_uuid, &stats)?;
         drop(index_rtxn);
 
         drop(index_map); // Release lock before committing
 
+        tracing::trace!(target: "snapshot_import", "Committing transaction for index mapping and stats.");
+
         wtxn.commit()?; // Commit changes to mapping and stats
+        tracing::trace!(target: "snapshot_import", "Transaction committed.");
 
         // 6. Cleanup is handled by tempfile's Drop trait
 
+        tracing::trace!(target: "snapshot_import", "Import successful for target '{}'.", target_index_uid);
         Ok((index, metadata))
     }
 }
