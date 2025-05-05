@@ -1665,13 +1665,16 @@ mod msfj_sis_scheduler_e2e_tests {
     use meilisearch_types::facet_values_sort::FacetValuesSort;
     use meilisearch_types::locales::LocalizedAttributesRuleView;
     use meilisearch_types::milli::vector::settings::{EmbedderSource, EmbeddingSettings};
-    use meilisearch_types::settings::{Settings, TypoToleranceSettings, MinWordSizeForTypos, WildcardSetting, ProximityPrecisionView, PrefixSearchSettings, SettingEmbeddingSettings, Unchecked}; // Add missing/correct types
+    // Corrected import paths for settings types
+    use meilisearch_types::settings::{MinWordSizeForTypos, Settings, TypoToleranceSettings, WildcardSetting, SettingEmbeddingSettings, Unchecked};
     use meilisearch_types::tasks::{Details, KindWithContent, Status};
     use milli::index::PrefixSearch;
     use milli::proximity::ProximityPrecision;
-    use milli::update::{Setting, RankingRule}; // Add RankingRule
-    use milli::{FilterableAttributesRule}; // Remove unused LocalizedAttributesRule, OrderBy
-    use milli::order_by_map::OrderByMap; // Correct path for OrderByMap
+    // Corrected import path for RankingRule
+    use milli::update::settings::RankingRule;
+    use milli::update::Setting;
+    use milli::FilterableAttributesRule;
+    // Removed unused OrderByMap import
     use std::collections::{BTreeMap, BTreeSet, HashSet};
     use std::path::PathBuf;
 
@@ -1698,7 +1701,7 @@ mod msfj_sis_scheduler_e2e_tests {
 
         // Apply diverse settings
         let mut settings = Settings::<Unchecked>::default();
-        // Use WildcardSetting for displayed/searchable
+        // Use correct enum variant for WildcardSetting
         settings.displayed_attributes = WildcardSetting::Set(vec![S("id"), S("name")]);
         settings.searchable_attributes = WildcardSetting::Set(vec![S("name"), S("description")]);
         settings.filterable_attributes =
@@ -1940,24 +1943,12 @@ mod msfj_sis_scheduler_e2e_tests {
         let target_stop_words: Option<BTreeSet<String>> = target_index.stop_words(&target_rtxn).unwrap().map(|fst| fst.stream().into_strs().unwrap().into_iter().collect());
         assert_eq!(source_stop_words, target_stop_words, "Stop words mismatch");
 
-        // Convert synonyms fst::Map to BTreeMap<String, Vec<String>> for comparison
-        let convert_synonyms = |synonyms_map: Option<fst::Map<fst::automaton::AlwaysMatch>>| -> Option<BTreeMap<String, Vec<String>>> {
-            synonyms_map.map(|fst_map| {
-                let mut map = BTreeMap::new();
-                let mut stream = fst_map.stream();
-                while let Some((key_bytes, value_index)) = stream.next() {
-                    let key = String::from_utf8(key_bytes.to_vec()).unwrap();
-                    // The value_index points to the start of an fst::Set within the main FST's node data
-                    let synonyms_fst_set = fst::Set::new(&fst_map.as_fst().nodes()[value_index as usize..]).unwrap();
-                    let synonyms: Vec<String> = synonyms_fst_set.stream().into_strs().unwrap();
-                    map.insert(key, synonyms);
-                }
-                map
-            })
-        };
-        let source_synonyms = convert_synonyms(source_index.synonyms(&source_rtxn).unwrap());
-        let target_synonyms = convert_synonyms(target_index.synonyms(&target_rtxn).unwrap());
-        assert_eq!(source_synonyms, target_synonyms, "Synonyms mismatch");
+        // Directly compare the HashMaps returned by index.synonyms()
+        assert_eq!(
+            source_index.synonyms(&source_rtxn).unwrap(),
+            target_index.synonyms(&target_rtxn).unwrap(),
+            "Synonyms mismatch"
+        );
 
         assert_eq!(
             source_index.distinct_field(&source_rtxn).unwrap(), // Use distinct_field
@@ -2025,28 +2016,30 @@ mod msfj_sis_scheduler_e2e_tests {
                  (milli::vector::EmbedderOptions::Rest(s), milli::vector::EmbedderOptions::Rest(t)) => assert_eq!(s, t, "Rest options mismatch"),
                  (milli::vector::EmbedderOptions::UserProvided(s), milli::vector::EmbedderOptions::UserProvided(t)) => assert_eq!(s, t, "UserProvided options mismatch"),
                  (milli::vector::EmbedderOptions::Ollama(s), milli::vector::EmbedderOptions::Ollama(t)) => assert_eq!(s, t, "Ollama options mismatch"),
-                 _ => panic!("Mismatched embedder option types"),
-             }
-             assert_eq!(src_cfg.config.prompt, tgt_cfg.config.prompt, "Embedder prompt mismatch");
-             assert_eq!(src_cfg.user_provided, tgt_cfg.user_provided, "Embedder user_provided bitmap mismatch");
-        }
-        // Localized Attributes
+                _ => panic!("Mismatched embedder option types"),
+            }
+            // Compare PromptData fields individually
+            assert_eq!(src_cfg.config.prompt.template, tgt_cfg.config.prompt.template, "Embedder prompt template mismatch");
+            assert_eq!(src_cfg.config.prompt.max_bytes, tgt_cfg.config.prompt.max_bytes, "Embedder prompt max_bytes mismatch");
+            assert_eq!(src_cfg.user_provided, tgt_cfg.user_provided, "Embedder user_provided bitmap mismatch");
+       }
+       // Localized Attributes
         assert_eq!(
             source_index.localized_attributes_rules(&source_rtxn).unwrap(),
             target_index.localized_attributes_rules(&target_rtxn).unwrap(),
             "Localized attributes mismatch"
         );
-        // Tokenization (Convert FST sets to BTreeSet for comparison)
-        let source_separator_tokens: Option<BTreeSet<String>> = source_index.separator_tokens(&source_rtxn).unwrap().map(|fst| fst.stream().into_strs().unwrap().into_iter().collect());
-        let target_separator_tokens: Option<BTreeSet<String>> = target_index.separator_tokens(&target_rtxn).unwrap().map(|fst| fst.stream().into_strs().unwrap().into_iter().collect());
+        // Tokenization (Convert FST sets to BTreeSet for comparison - call stream() on fst inside map)
+        let source_separator_tokens: Option<BTreeSet<String>> = source_index.separator_tokens(&source_rtxn).unwrap().map(|fst_set| fst_set.stream().into_strs().unwrap().into_iter().collect());
+        let target_separator_tokens: Option<BTreeSet<String>> = target_index.separator_tokens(&target_rtxn).unwrap().map(|fst_set| fst_set.stream().into_strs().unwrap().into_iter().collect());
         assert_eq!(source_separator_tokens, target_separator_tokens, "Separator tokens mismatch");
 
-        let source_non_separator_tokens: Option<BTreeSet<String>> = source_index.non_separator_tokens(&source_rtxn).unwrap().map(|fst| fst.stream().into_strs().unwrap().into_iter().collect());
-        let target_non_separator_tokens: Option<BTreeSet<String>> = target_index.non_separator_tokens(&target_rtxn).unwrap().map(|fst| fst.stream().into_strs().unwrap().into_iter().collect());
+        let source_non_separator_tokens: Option<BTreeSet<String>> = source_index.non_separator_tokens(&source_rtxn).unwrap().map(|fst_set| fst_set.stream().into_strs().unwrap().into_iter().collect());
+        let target_non_separator_tokens: Option<BTreeSet<String>> = target_index.non_separator_tokens(&target_rtxn).unwrap().map(|fst_set| fst_set.stream().into_strs().unwrap().into_iter().collect());
         assert_eq!(source_non_separator_tokens, target_non_separator_tokens, "Non-separator tokens mismatch");
 
-        let source_dictionary: Option<BTreeSet<String>> = source_index.dictionary(&source_rtxn).unwrap().map(|fst| fst.stream().into_strs().unwrap().into_iter().collect());
-        let target_dictionary: Option<BTreeSet<String>> = target_index.dictionary(&target_rtxn).unwrap().map(|fst| fst.stream().into_strs().unwrap().into_iter().collect());
+        let source_dictionary: Option<BTreeSet<String>> = source_index.dictionary(&source_rtxn).unwrap().map(|fst_set| fst_set.stream().into_strs().unwrap().into_iter().collect());
+        let target_dictionary: Option<BTreeSet<String>> = target_index.dictionary(&target_rtxn).unwrap().map(|fst_set| fst_set.stream().into_strs().unwrap().into_iter().collect());
         assert_eq!(source_dictionary, target_dictionary, "Dictionary mismatch");
         // Search Cutoff
         assert_eq!(
