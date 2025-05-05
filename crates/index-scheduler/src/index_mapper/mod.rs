@@ -749,8 +749,9 @@ impl IndexMapper {
         );
 
         // Handle potential eviction
-        if let index_map::InsertionOutcome::Evicted(evicted_uuid, evicted_index) = outcome {
-            // Use the public close method defined in index_map.rs
+        // Use the full path to InsertionOutcome::Evicted
+        if let crate::lru::InsertionOutcome::Evicted(evicted_uuid, evicted_index) = outcome {
+            // Call close directly on the RwLockWriteGuard (it dereferences to IndexMap)
             index_map.close(evicted_uuid, evicted_index, self.enable_mdb_writemap, 0);
         }
 
