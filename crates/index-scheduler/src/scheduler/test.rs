@@ -1680,10 +1680,24 @@ mod msfj_sis_scheduler_e2e_tests {
     use std::collections::{BTreeMap, BTreeSet, HashSet};
     use std::path::PathBuf;
 
+    use crate::Opt; // Import Opt for configuration
+    use std::fs as std_fs; // Alias std::fs to avoid conflict
+
     #[actix_rt::test]
     async fn test_e2e_snapshot_create_import_verify() {
         // === 1. Setup ===
-        let (index_scheduler, mut handle) = IndexScheduler::test(true, vec![]);
+        // Define a stable snapshot path within the target directory
+        let stable_snapshot_path = PathBuf::from("./target/test_snapshots/e2e_test/");
+        // Ensure the directory exists and is clean
+        if stable_snapshot_path.exists() {
+            std_fs::remove_dir_all(&stable_snapshot_path).expect("Failed to clean stable snapshot dir");
+        }
+        std_fs::create_dir_all(&stable_snapshot_path).expect("Failed to create stable snapshot dir");
+
+        // Configure IndexScheduler to use the stable path
+        let options = vec![Opt::SnapshotsPath(stable_snapshot_path.clone())];
+        let (index_scheduler, mut handle) = IndexScheduler::test(true, options);
+
         // Define UIDs directly where used to ensure 'static lifetime
         let target_index_uid = S("target_e2e");
 
@@ -1811,7 +1825,8 @@ mod msfj_sis_scheduler_e2e_tests {
             // Ensure we only use the UUID part from the potentially incorrect stored snapshot_uid.
             let uuid_part = snapshot_uid.split('-').last().unwrap_or(&snapshot_uid); // Get part after last '-' or the whole string
             let filename = format!("{}-{}.snapshot.tar.gz", S("source_e2e"), uuid_part); // Use literal index name and extracted UUID
-            snapshot_path = index_scheduler.fj_snapshots_path().join(filename); // Assign to outer scope variable
+            // Use the stable_snapshot_path configured earlier
+            snapshot_path = stable_snapshot_path.join(filename); // Assign to outer scope variable
 
             // === Test Logging Step ===
             tracing::info!(target: "snapshot_e2e_test", "Retrieved snapshot_uid from task: {}", snapshot_uid);
@@ -1828,12 +1843,11 @@ mod msfj_sis_scheduler_e2e_tests {
             tracing::info!(target: "snapshot_e2e_test", "Checking file existence immediately before assertion loop: {:?} -> Exists: {}", snapshot_path, pre_loop_exists);
             // === End Pre-Loop Check ===
 
-            // === Simplified Assertion with Delay ===
-            // Add a small delay to test timing sensitivity
-            std::thread::sleep(std::time::Duration::from_millis(50)); // Wait 50ms
-            assert!(snapshot_path.is_file(), "[Simplified Assertion Failed] Snapshot file {:?} not found immediately after pre-loop check + delay.", snapshot_path);
-            tracing::info!(target: "snapshot_e2e_test", "[Simplified Assertion Passed] Snapshot file {:?} found after delay.", snapshot_path);
-            // === End Simplified Assertion with Delay ===
+            // === Simplified Assertion (No Delay) ===
+            // Assert directly after the pre-loop check using the stable path.
+            assert!(snapshot_path.is_file(), "[Simplified Assertion Failed] Snapshot file {:?} not found immediately after pre-loop check (using stable path).", snapshot_path);
+            tracing::info!(target: "snapshot_e2e_test", "[Simplified Assertion Passed] Snapshot file {:?} found (using stable path).", snapshot_path);
+            // === End Simplified Assertion ===
 
 
             // Verify creation progress trace
