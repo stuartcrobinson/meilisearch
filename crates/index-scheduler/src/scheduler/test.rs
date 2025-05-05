@@ -960,7 +960,7 @@ mod msfj_sis_scheduler_import_tests {
 
     // Helper to create a valid snapshot for import tests
     // Moved inside the module
-    fn create_test_snapshot(
+    async fn create_test_snapshot( // Make the function async
         index_scheduler: &IndexScheduler,
         handle: &mut crate::test_utils::IndexSchedulerHandle, // Add handle parameter
         source_index_uid: &str,
@@ -1084,15 +1084,15 @@ mod msfj_sis_scheduler_import_tests {
         snapshot_path
     }
 
-    #[test]
-    fn test_import_snapshot_happy_path() {
+    #[actix_rt::test] // Mark test as async
+    async fn test_import_snapshot_happy_path() { // Make test async
         let (index_scheduler, mut handle) = IndexScheduler::test(true, vec![]);
         let source_index = "source_index_import_happy";
         let target_index = "target_index_import_happy";
         // let snapshot_filename = format!("{}-test.snapshot.tar.gz", source_index); // No longer needed here
 
         let snapshot_path =
-            create_test_snapshot(&index_scheduler, &mut handle, source_index); // Remove extra argument
+            create_test_snapshot(&index_scheduler, &mut handle, source_index).await; // Add .await
 
         // Register the import task
         let import_task = KindWithContent::SingleIndexSnapshotImport {
@@ -1139,8 +1139,8 @@ mod msfj_sis_scheduler_import_tests {
         assert!(filterable.contains("name"));
     }
 
-     #[test]
-    fn test_import_snapshot_with_embedders() {
+     #[actix_rt::test] // Mark test as async
+    async fn test_import_snapshot_with_embedders() { // Make test async
         let (index_scheduler, mut handle) = IndexScheduler::test(true, vec![]);
         let source_index = "source_index_import_embed";
         let target_index = "target_index_import_embed";
@@ -1193,7 +1193,7 @@ mod msfj_sis_scheduler_import_tests {
         // 3. Create the snapshot (now that settings are applied)
         // create_test_snapshot will use the existing index with applied settings.
         let snapshot_path =
-            create_test_snapshot(&index_scheduler, &mut handle, source_index); // This call snapshots the existing index
+            create_test_snapshot(&index_scheduler, &mut handle, source_index).await; // Add .await
 
         // 4. Register the import task
         let import_task = KindWithContent::SingleIndexSnapshotImport {
@@ -1231,15 +1231,15 @@ mod msfj_sis_scheduler_import_tests {
         // Matching the UserProvided variant implies the source was correctly set during configuration.
     }
 
-    #[test]
-    fn test_import_snapshot_target_exists() {
+    #[actix_rt::test] // Mark test as async
+    async fn test_import_snapshot_target_exists() { // Make test async
         let (index_scheduler, mut handle) = IndexScheduler::test(true, vec![]);
         let source_index = "source_index_import_exists";
         let target_index = "target_index_import_exists"; // Same name for source and target
         // let snapshot_filename = format!("{}-test.snapshot.tar.gz", source_index); // No longer needed here
 
         let snapshot_path =
-            create_test_snapshot(&index_scheduler, &mut handle, source_index); // Remove extra argument
+            create_test_snapshot(&index_scheduler, &mut handle, source_index).await; // Add .await
 
         // Create the target index beforehand
         let creation_task = index_creation_task(target_index, Some("id"));
@@ -1358,8 +1358,8 @@ mod msfj_sis_scheduler_import_tests {
         // StatusCode is not persisted.
     }
 
-     #[test]
-    fn test_import_snapshot_version_mismatch() {
+     #[actix_rt::test] // Mark test as async
+    async fn test_import_snapshot_version_mismatch() { // Make test async
         let (index_scheduler, mut handle) = IndexScheduler::test(true, vec![]);
         let source_index = "source_index_version_mismatch";
         let target_index = "target_index_version_mismatch";
@@ -1367,7 +1367,7 @@ mod msfj_sis_scheduler_import_tests {
 
         // Create a valid snapshot first
         let snapshot_path =
-            create_test_snapshot(&index_scheduler, &mut handle, source_index); // Remove extra argument
+            create_test_snapshot(&index_scheduler, &mut handle, source_index).await; // Add .await
 
         // Check snapshot exists *after* creation
         // Add a small delay for potential filesystem sync issues (though sync_all should handle this)
