@@ -1072,11 +1072,16 @@ mod msfj_sis_scheduler_import_tests {
         assert!(task.error.is_none());
         match task.details {
             Some(Details::SingleIndexSnapshotImport { source_snapshot_uid, target_index_uid }) => {
-                // Extract the expected UUID part from the filename stem for comparison
-                let filename_stem = snapshot_path.file_stem().unwrap().to_str().unwrap();
-                // Assuming the stored source_snapshot_uid might be just the UUID or the full stem
-                let expected_uuid_part = filename_stem.split('-').last().unwrap_or(filename_stem);
+                // Extract the expected FULL UUID part from the filename stem for comparison
+                let expected_uuid_part = snapshot_path
+                    .file_stem() // Get "index_uid-uuid.snapshot.tar"
+                    .and_then(|s| s.to_str())
+                    .and_then(|stem| stem.split('.').next()) // Get "index_uid-uuid"
+                    .and_then(|name_part| name_part.split_once('-')) // Split into ("index_uid", "uuid")
+                    .map(|(_index, uuid)| uuid) // Get the full UUID part as &str
+                    .expect("Could not extract UUID from snapshot filename stem");
 
+                // Compare the full UUID stored in details with the full UUID extracted from the path
                 assert_eq!(source_snapshot_uid, expected_uuid_part, "Snapshot UID mismatch in task details");
                 assert_eq!(target_index_uid, target_index, "Target index UID mismatch in task details");
             }
@@ -1915,14 +1920,16 @@ mod msfj_sis_scheduler_e2e_tests {
                     source_snapshot_uid: details_source_uid,
                     target_index_uid: details_target_uid,
                 }) => {
+                    // Extract the expected FULL UUID part from the filename stem for comparison
                     let expected_source_uid = snapshot_path
-                        .file_stem()
-                        .unwrap()
-                        .to_str()
-                        .unwrap()
-                        .split_once('-')
-                        .map(|(_, uid)| uid)
-                        .unwrap_or("");
+                        .file_stem() // Get "index_uid-uuid.snapshot.tar"
+                        .and_then(|s| s.to_str())
+                        .and_then(|stem| stem.split('.').next()) // Get "index_uid-uuid"
+                        .and_then(|name_part| name_part.split_once('-')) // Split into ("index_uid", "uuid")
+                        .map(|(_index, uuid)| uuid) // Get the full UUID part as &str
+                        .expect("Could not extract UUID from snapshot filename stem");
+
+                    // Compare the full UUID stored in details with the full UUID extracted from the path
                     assert_eq!(details_source_uid, expected_source_uid);
                     assert_eq!(details_target_uid, target_index_uid);
                 }
