@@ -1455,4 +1455,150 @@ mod msfj_sis_scheduler_import_tests {
         // Asserting on it after deserialization will likely fail as it defaults to 200 OK.
         // Checking the message content is a more reliable way to verify the correct error was stored.
     }
+
+    #[actix_rt::test]
+    async fn test_import_snapshot_with_all_settings() {
+        use meilisearch_types::settings::{
+            FacetingSettings, LocalizedAttributesRuleView, MinWordSizeForTypos, OrderByType,
+            PaginationSettings, PrefixSearchSettings, TypoToleranceSettings, FacetSearchSettings,
+        };
+        use milli::update::{LocalizedAttributesRule, PrefixSearch};
+        use milli::vector::settings::ProximityPrecision;
+        use std::collections::{BTreeMap, BTreeSet, HashSet};
+
+        let (index_scheduler, mut handle) = IndexScheduler::test(true, vec![]);
+        let source_index = "source_index_all_settings";
+        let target_index = "target_index_all_settings";
+
+        // 1. Create and prepare the source index with various non-default settings
+        let creation_task = index_creation_task(source_index, Some("id"));
+        let _creation_task_id = index_scheduler.register(creation_task, None, false).unwrap().uid;
+        handle.advance_one_successful_batch(); // Process index creation
+
+        let index = index_scheduler.index(source_index).unwrap();
+        let mut wtxn = index.write_txn().unwrap();
+        let mut settings = milli::update::Settings::new(
+            &mut wtxn,
+            &index,
+            index_scheduler.indexer_config(),
+        );
+
+        // Apply non-default settings
+        settings.set_autorize_typos(false);
+        settings.set_min_word_len_one_typo(6);
+        settings.set_min_word_len_two_typos(10);
+        settings.set_exact_words(BTreeSet::from(["exact".to_string()]));
+        settings.set_exact_attributes(HashSet::from(["exact_attr".to_string()]));
+
+        settings.set_max_values_per_facet(50);
+        let mut sort_facet_values_by = BTreeMap::new();
+        sort_facet_values_by.insert("size".to_string(), milli::update::OrderBy::Desc);
+        settings.set_sort_facet_values_by(OrderByMap::from(sort_facet_values_by));
+
+        settings.set_pagination_max_total_hits(500);
+
+        settings.set_proximity_precision(ProximityPrecision::ByWord);
+
+        settings.set_localized_attributes_rules(vec![LocalizedAttributesRule {
+            attribute_patterns: vec!["title#fr".to_string()],
+            locales: vec!["title".to_string()],
+        }]);
+
+        settings.set_separator_tokens(BTreeSet::from(["&".to_string()]));
+        settings.set_non_separator_tokens(BTreeSet::from(["#".to_string()]));
+        settings.set_dictionary(BTreeSet::from(["wordA".to_string(), "wordB".to_string()]));
+        settings.set_search_cutoff(100);
+        settings.set_prefix_search(PrefixSearch { enabled: true, min_prefix_length: 3 });
+        settings.set_facet_search(meilisearch_types::settings::FacetSearchSettings { enabled: true, max_candidates: 10 });
+
+        // Keep embedders simple as tested elsewhere
+        let mut embedders = BTreeMap::default();
+        embedders.insert(S("default"), Setting::Set(EmbeddingSettings {
+            source: Setting::Set(EmbedderSource::UserProvided),
+            dimensions: Setting::Set(1),
+            ..Default::default()
+        }));
+        settings.set_embedder_settings(embedders);
+
+        settings.execute(|_| {}, || false).unwrap();
+        wtxn.commit().unwrap();
+
+        // 2. Create the snapshot of the prepared index
+        let snapshot_path =
+            create_test_snapshot(&index_scheduler, /* &mut handle, */ source_index).await;
+
+        // 3. Register the import task
+        let import_task = KindWithContent::SingleIndexSnapshotImport {
+            source_snapshot_path: snapshot_path.to_str().unwrap().to_string(),
+            target_index_uid: target_index.to_string(),
+        };
+        let task_id = index_scheduler.register(import_task, None, false).unwrap().uid;
+
+        // 4. Process the task
+        handle.advance_one_successful_batch();
+
+        // 5. Assertions
+        let rtxn = index_scheduler.read_txn().unwrap();
+        let task = index_scheduler.queue.tasks.get_task(&rtxn, task_id).unwrap().unwrap();
+        assert_eq!(task.status, Status::Succeeded, "Import task failed: {:?}", task.error);
+        assert!(task.error.is_none());
+
+        assert!(index_scheduler.index_exists(target_index).unwrap());
+        let imported_index = index_scheduler.index(target_index).unwrap();
+        let index_rtxn = imported_index.read_txn().unwrap();
+
+        // Verify Typo Tolerance
+        let typo_tolerance = imported_index.typo_tolerance(&index_rtxn).unwrap();
+        assert_eq!(typo_tolerance.enabled, false);
+        assert_eq!(typo_tolerance.min_word_size_for_typos.one_typo, 6);
+        assert_eq!(typo_tolerance.min_word_size_for_typos.two_typos, 10);
+        assert_eq!(typo_tolerance.disable_on_words, BTreeSet::from(["exact".to_string()]));
+        assert_eq!(typo_tolerance.disable_on_attributes, HashSet::from(["exact_attr".to_string()]));
+
+        // Verify Faceting
+        let faceting = imported_index.faceting(&index_rtxn).unwrap();
+        assert_eq!(faceting.max_values_per_facet, 50);
+        let expected_sort_by: BTreeMap<String, OrderByType> =
+            BTreeMap::from([("size".to_string(), OrderByType::Desc)]);
+        assert_eq!(faceting.sort_facet_values_by, expected_sort_by);
+
+        // Verify Pagination
+        let pagination = imported_index.pagination(&index_rtxn).unwrap();
+        assert_eq!(pagination.max_total_hits, 500);
+
+        // Verify Proximity Precision
+        let proximity = imported_index.proximity_precision(&index_rtxn).unwrap();
+        assert_eq!(proximity, ProximityPrecision::ByWord);
+
+        // Verify Localized Attributes
+        let localized = imported_index.localized_attributes_rules(&index_rtxn).unwrap();
+        let expected_localized = vec![LocalizedAttributesRuleView {
+            attribute_patterns: vec!["title#fr".to_string()],
+            locales: vec!["title".to_string()],
+        }];
+        assert_eq!(localized, expected_localized);
+
+        // Verify Tokenization Settings
+        assert_eq!(imported_index.separator_tokens(&index_rtxn).unwrap(), &BTreeSet::from(["&".to_string()]));
+        assert_eq!(imported_index.non_separator_tokens(&index_rtxn).unwrap(), &BTreeSet::from(["#".to_string()]));
+        assert_eq!(imported_index.dictionary(&index_rtxn).unwrap(), &BTreeSet::from(["wordA".to_string(), "wordB".to_string()]));
+
+        // Verify Search Cutoff
+        assert_eq!(imported_index.search_cutoff(&index_rtxn).unwrap(), Some(100));
+
+        // Verify Prefix Search
+        let prefix_search = imported_index.prefix_search(&index_rtxn).unwrap();
+        let expected_prefix_search = PrefixSearchSettings { enabled: true, min_prefix_length: 3 };
+        assert_eq!(prefix_search, expected_prefix_search);
+
+        // Verify Facet Search
+        let facet_search = imported_index.facet_search(&index_rtxn).unwrap();
+        let expected_facet_search = FacetSearchSettings { enabled: true, max_candidates: 10 };
+        assert_eq!(facet_search, expected_facet_search);
+
+        // Verify Embedders (basic check)
+        let imported_embedders = imported_index.embedding_configs(&index_rtxn).unwrap();
+        assert_eq!(imported_embedders.len(), 1);
+        assert!(imported_embedders.iter().any(|c| c.name == "default"));
+    }
 }
