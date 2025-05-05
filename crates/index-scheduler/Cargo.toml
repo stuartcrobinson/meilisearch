@@ -56,4 +56,5 @@ insta = { version = "=1.39.0", features = ["json", "redactions"] }
 maplit = "1.0.2"
 meili-snap = { path = "../meili-snap" }
 tokio = { version = "1.39.2", features = ["rt", "macros"] } # Add tokio dev dependency
+tracing-subscriber = { workspace = true, features = ["env-filter"] } # Add tracing-subscriber
 walkdir = "1" # [meilisearchfj] Added for snapshot tests
