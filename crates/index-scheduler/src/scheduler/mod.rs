@@ -21,7 +21,7 @@ use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
 use std::sync::Arc;
 
 use convert_case::{Case, Casing as _};
-use meilisearch_types::error::ResponseError;
+use meilisearch_types::error::{ErrorCode, ResponseError}; // Import ErrorCode here
 use meilisearch_types::heed::{Env, WithoutTls};
 use meilisearch_types::milli;
 use meilisearch_types::tasks::Status;
