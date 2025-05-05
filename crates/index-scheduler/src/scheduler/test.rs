@@ -1243,6 +1243,8 @@ mod msfj_sis_scheduler_import_tests {
         // Modify the metadata.json within the snapshot to have a different version
         let temp_extract_dir = tempdir().unwrap();
         { // Scope for file reading
+            // Add assertion to check if path is a file
+            assert!(snapshot_path.is_file(), "Snapshot path is not a file: {:?}", snapshot_path);
             // Read the compressed data into memory first
             let compressed_data = std::fs::read(&snapshot_path).unwrap();
             let gz_decoder = flate2::read::GzDecoder::new(compressed_data.as_slice());
