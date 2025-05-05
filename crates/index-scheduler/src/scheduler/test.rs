@@ -968,7 +968,7 @@ mod msfj_sis_scheduler_import_tests {
         // 1. Create source index and add data/settings
         let task = index_creation_task(source_index_uid, Some("id"));
         let task_id = index_scheduler.register(task, None, false).unwrap().uid;
-        handle_tasks(index_scheduler, &[task_id]);
+        handle.advance_one_successful_batch(); // Use handle to process the task
 
         let index = index_scheduler.index(source_index_uid).unwrap();
         let mut wtxn = index.write_txn().unwrap();
@@ -1064,7 +1064,7 @@ mod msfj_sis_scheduler_import_tests {
         // 1. Create source index and add settings including embedders
         let task = index_creation_task(source_index, Some("id"));
         let task_id = index_scheduler.register(task, None, false).unwrap().uid;
-        handle_tasks(&index_scheduler, &[task_id]);
+        handle.advance_one_successful_batch(); // Use handle to process the task
 
         let index = index_scheduler.index(source_index).unwrap();
         let mut wtxn = index.write_txn().unwrap();
@@ -1112,13 +1112,15 @@ mod msfj_sis_scheduler_import_tests {
         assert_eq!(imported_embedders.len(), 1);
         assert!(imported_embedders.iter().any(|c| c.name == "default"));
         let config = imported_embedders.iter().find(|c| c.name == "default").unwrap();
-        // Check dimensions via embedder_options.
-        assert_eq!(config.config.embedder_options.dimensions.as_ref().unwrap(), &1);
-        // Check source via embedder_options.
-        assert!(matches!(
-            config.config.embedder_options.source,
-            Setting::Set(EmbedderSource::UserProvided)
-        ));
+        // Check dimensions by matching the UserProvided variant
+        match &config.config.embedder_options {
+            meilisearch_types::milli::vector::EmbedderOptions::UserProvided(options) => {
+                assert_eq!(options.dimensions, 1);
+            }
+            other => panic!("Expected UserProvided embedder options, found {:?}", other),
+        }
+        // Note: We can't directly check the 'source' field on the retrieved EmbedderOptions enum.
+        // Matching the UserProvided variant implies the source was correctly set during configuration.
     }
 
     #[test]
@@ -1133,8 +1135,8 @@ mod msfj_sis_scheduler_import_tests {
 
         // Create the target index beforehand
         let creation_task = index_creation_task(target_index, Some("id"));
-        let creation_task_id = index_scheduler.register(creation_task, None, false).unwrap().uid;
-        handle_tasks(&index_scheduler, &[creation_task_id]);
+        let _creation_task_id = index_scheduler.register(creation_task, None, false).unwrap().uid;
+        handle.advance_one_successful_batch(); // Use handle to process the task
 
 
         // Register the import task
