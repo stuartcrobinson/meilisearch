@@ -225,9 +225,16 @@ impl Error {
             | Error::IoError(_)
             | Error::Persist(_)
             | Error::FeatureNotEnabled(_)
-            | Error::DocumentFormat(_) // Add DocumentFormat as recoverable
+            | Error::DocumentFormat(_)
             | Error::Anyhow(_) => true,
-            Error::SnapshotCreationFailed { .. } => true, // Snapshot creation failure is recoverable at the task level
+            // Snapshot errors are generally recoverable at the task level
+            Error::SnapshotCreationFailed { .. } => true,
+            Error::InvalidSnapshotFormat { .. } => true,
+            Error::SnapshotImportFailed { .. } => true,
+            Error::SnapshotImportTargetIndexExists { .. } => true,
+            Error::SnapshotVersionMismatch { .. } => true,
+            Error::InvalidSnapshotPath { .. } => true,
+            // Irrecoverable errors
             Error::CreateBatch(_)
             | Error::CorruptedTaskQueue
             | Error::DatabaseUpgrade(_)
@@ -292,6 +299,12 @@ impl ErrorCode for Error {
             Error::Persist(e) => e.error_code(),
             Error::FeatureNotEnabled(_) => Code::FeatureNotEnabled,
             Error::DocumentFormat(e) => e.error_code(),
+            Error::SnapshotCreationFailed { .. } => Code::SnapshotCreationFailed,
+            Error::InvalidSnapshotFormat { .. } => Code::InvalidSnapshotFormat,
+            Error::SnapshotImportFailed { .. } => Code::SnapshotImportFailed,
+            Error::SnapshotImportTargetIndexExists { .. } => Code::IndexAlreadyExists,
+            Error::SnapshotVersionMismatch { .. } => Code::SnapshotVersionMismatch,
+            Error::InvalidSnapshotPath { .. } => Code::InvalidSnapshotPath,
 
             // Irrecoverable errors
             Error::Anyhow(_) => Code::Internal,
@@ -303,12 +316,6 @@ impl ErrorCode for Error {
 
             // This one should never be seen by the end user
             Error::AbortedTask => Code::Internal,
-            Error::SnapshotCreationFailed { .. } => Code::SnapshotCreationFailed,
-            Error::InvalidSnapshotFormat { .. } => Code::InvalidSnapshotFormat,
-            Error::SnapshotImportFailed { .. } => Code::SnapshotImportFailed,
-            Error::SnapshotImportTargetIndexExists { .. } => Code::IndexAlreadyExists,
-            Error::SnapshotVersionMismatch { .. } => Code::SnapshotVersionMismatch,
-            Error::InvalidSnapshotPath { .. } => Code::InvalidSnapshotPath,
 
             #[cfg(test)]
             Error::PlannedFailure => Code::Internal,

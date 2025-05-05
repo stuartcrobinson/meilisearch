@@ -157,6 +157,13 @@ where
         None
     }
 
+    /// The current number of elements in the cache map.
+    ///
+    /// This value is guaranteed to be less than or equal to [`Self::capacity`].
+    pub fn len(&self) -> usize {
+        self.0.len()
+    }
+
     /// Inserts a value in the cache map by its key, replacing any existing value and returning any evicted value.
     ///
     /// # Complexity

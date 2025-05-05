@@ -47,6 +47,7 @@ This guide outlines the steps for implementing the core backend functionality, s
     *   **Running Tests**: Use `cargo test` with a filter argument matching the prefix:
         *   Run *all* custom tests: `cargo test msfj_`
         *   Run *only* Single Index Snapshot tests: `cargo test msfj_sis_`
+    *   **New Code in Existing Files**: **IMPORTANT:** Prefix *all* new functions, structs, enums, or significant code blocks added to *existing* Meilisearch files with `fj_` (e.g., `fn fj_my_helper_function(...)`, `struct FjMyStruct { ... }`). This is crucial for differentiating fork-specific additions within upstream files and preventing merge conflicts. **Do not forget this prefix.**
 
 ### Implementation Steps:
 
@@ -149,6 +150,9 @@ crates/index-scheduler/src/lib.rs
         *   **Release Lock**: Release the "currently updating" status via `IndexMapper::set_currently_updating_index(None)`.
 *   **Testing (TDD)**: Write integration tests: Manually enqueue a `SingleIndexSnapshotCreation` task. Run the scheduler's `tick()` method (or relevant parts). Verify the scheduler correctly calls the core `create_index_snapshot` function and handles its `Result` to update the task's final status (`Succeeded`/`Failed`) and `details.snapshot_uid` (on success). The snapshot file integrity itself is already tested in Step 3. Test error handling (e.g., index not found).
 *   **Step Completion Check**: Add the `cargo test` command here to run only the tests implemented for this step.
+```
+cargo test -p index-scheduler -- tests::msfj_sis_scheduler_integration
+```
 
 ### 5. Implement Core Snapshot Import Logic (`IndexMapper` Method)
 
@@ -181,6 +185,9 @@ crates/index-scheduler/src/lib.rs
         *   Return the opened `Index` and the parsed metadata.
 *   **Testing (TDD)**: Write integration tests calling the `IndexMapper::import_index_from_snapshot` method directly with a prepared snapshot file and target UID. Verify the index directory is created, `data.mdb` is present, the mapping exists in `index_mapping`, the `Index` object is returned, and the `IndexMap` contains the new index. **Specifically test the scenario where importing causes an LRU eviction to ensure `IndexMap::close` is handled correctly.** Test errors (invalid path, target exists, bad format, version mismatch, I/O). Verify temporary directory cleanup on success and failure.
 *   **Step Completion Check**: Add the `cargo test` command here to run only the tests implemented for this step.
+```
+cargo test -p index-scheduler -- tests::msfj_sis_index_mapper_import
+```
 
 ### 6. Integrate Snapshot Import into Scheduler
 
@@ -272,5 +279,12 @@ Debugging:
  5 Clean Builds: While it didn't solve the core issue here, running cargo clean periodically during complex debugging can rule out stale build       
    artifacts causing strange behavior.                                                                                                               
 
+When debugging persistent test failures, avoid sequential trial-and-error fixes. Instead, adopt a broader diagnostic approach. Formulate multiple hypotheses for the root cause (e.g., path issues, permissions, resource lifecycles, library interactions). Instrument the code around the failure point with detailed logging, assertions, and contextual error messages (`map_err`) to pinpoint the exact failure location and state. Verify assumptions, like directory existence or file accessibility, just before the failing operation. This systematic approach helps identify the true cause, such as premature temporary file cleanup or incorrect path handling, more efficiently than isolated fixes.
+
 The key is to reduce assumptions and verify types and paths by looking directly at the relevant source code definitions and re-exports when compiler 
 errors become stubborn.                                                                                                                              
+
+
+TODO:  add a requirement that for each implementation step, we take a few steps to review everything newly written for for accuracy and reasonablenes and good software practices, and that it follows the rest of this sis_guide.md . and then double check that any before writing the tests and moving on
+
+NOTE:  when the AI agent interacts with the human, it should avoid pleasantries whenever possible.  no need for thank you. we want the conversation to be efficient and concise.

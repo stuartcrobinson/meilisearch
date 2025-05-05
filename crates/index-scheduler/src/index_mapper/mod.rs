@@ -3,6 +3,9 @@ use std::sync::{Arc, RwLock};
 use std::time::Duration;
 use std::{fs, thread};
 
+// Import version constants directly
+use meilisearch_types::versioning::{VERSION_MAJOR, VERSION_MINOR, VERSION_PATCH};
+// Remove incorrect import from crate root: use meilisearch_types::VERSION_STRING;
 use meilisearch_types::heed::types::{SerdeJson, Str};
 use meilisearch_types::heed::{Database, Env, RoTxn, RwTxn, WithoutTls};
 use meilisearch_types::milli;
@@ -11,22 +14,30 @@ use meilisearch_types::milli::update::IndexerConfig;
 use meilisearch_types::milli::{FieldDistribution, Index};
 use serde::{Deserialize, Serialize};
 use meilisearch_types::settings::Settings;
-use serde::{Deserialize, Serialize};
+// Duplicate serde import removed
 use time::OffsetDateTime;
 use tracing::error;
 use uuid::Uuid;
 
-use self::index_map::{IndexMap, InsertionOutcome};
+use self::index_map::IndexMap; // Keep IndexMap import
 use self::IndexStatus::{Available, BeingDeleted, Closing, Missing};
+// InsertionOutcome is no longer needed here after refactor in 8a13e19
+// use crate::lru::InsertionOutcome;
 use crate::uuid_codec::UuidCodec;
-use crate::{versioning, Error, IndexBudget, IndexSchedulerOptions, Result};
+// Remove unused versioning import
+use crate::{Error, IndexBudget, IndexSchedulerOptions, Result};
 
 mod index_map;
+
+// [meilisearchfj] Added env field (already imported above)
+// Duplicate Env import removed
+// [meilisearchfj] Added Path import
+use std::path::Path;
 
 /// Structure holding the deserialized content of `metadata.json` from a snapshot.
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub(crate) struct ParsedMetadata {
+pub(crate) struct FjParsedSnapshotMetadata {
     pub meilisearch_version: String,
     pub settings: Settings<meilisearch_types::settings::Unchecked>,
     #[serde(with = "time::serde::rfc3339")]
@@ -94,6 +105,11 @@ pub struct IndexMapper {
     /// A few types of long running batches of tasks that act on a single index set this field
     /// so that a handle to the index is available from other threads (search) in an optimized manner.
     currently_updating_index: Arc<RwLock<Option<(String, Index)>>>,
+
+    // [meilisearchfj] Added env field for direct access
+    env: Env<WithoutTls>,
+    // [meilisearchfj] Added snapshots_path field for explicit configuration
+    snapshots_path: PathBuf,
 }
 
 /// Whether the index is available for use or is forbidden to be inserted back in the index map
@@ -108,6 +124,18 @@ pub enum IndexStatus {
     Closing(index_map::ClosingIndex),
     /// You can use the index without worrying about anything.
     Available(Index),
+}
+
+impl IndexStatus {
+    /// [meilisearchfj] Helper to check if the status is Available.
+    pub fn fj_is_available(&self) -> bool {
+        matches!(self, Self::Available(_))
+    }
+
+    /// [meilisearchfj] Helper to check if the status is Closing.
+    pub fn fj_is_closing(&self) -> bool {
+        matches!(self, Self::Closing(_))
+    }
 }
 
 /// The statistics that can be computed from an `Index` object.
@@ -184,6 +212,8 @@ impl IndexMapper {
         budget: IndexBudget,
     ) -> Result<Self> {
         Ok(Self {
+            env: env.clone(), // [meilisearchfj] Clone env
+            snapshots_path: options.snapshots_path.clone(), // [meilisearchfj] Store snapshots_path
             index_map: Arc::new(RwLock::new(IndexMap::new(budget.index_count))),
             index_mapping: env.create_database(wtxn, Some(db_name::INDEX_MAPPING))?,
             index_stats: env.create_database(wtxn, Some(db_name::INDEX_STATS))?,
@@ -328,6 +358,26 @@ impl IndexMapper {
 
     pub fn exists(&self, rtxn: &RoTxn, name: &str) -> Result<bool> {
         Ok(self.index_mapping.get(rtxn, name)?.is_some())
+    }
+
+    /// [meilisearchfj] Returns the base path for indexes.
+    pub fn fj_base_path(&self) -> &Path {
+        &self.base_path
+    }
+
+    /// [meilisearchfj] Returns the number of indexes currently available in the LRU cache.
+    pub fn fj_available_cache_len(&self) -> usize {
+        self.index_map.read().unwrap().fj_available_len()
+    }
+
+    /// [meilisearchfj] Returns the number of indexes currently marked as unavailable (closing or deleting).
+    pub fn fj_unavailable_cache_len(&self) -> usize {
+        self.index_map.read().unwrap().fj_unavailable_len()
+    }
+
+    /// [meilisearchfj] Returns the status of an index in the cache.
+    pub fn fj_index_status(&self, uuid: &Uuid) -> IndexStatus {
+        self.index_map.read().unwrap().get(uuid)
     }
 
     /// Resizes the maximum size of the specified index to the double of its current maximum size.
@@ -570,24 +620,19 @@ impl IndexMapper {
     /// * The snapshot version is incompatible with the current Meilisearch version.
     /// * An I/O error occurs during unpacking or file operations.
     /// * An internal error occurs within Heed or Milli.
-    pub fn import_index_from_snapshot(
+    pub fn fj_import_index_from_snapshot(
         &self,
         target_index_uid: &str,
         snapshot_path: &Path,
-    ) -> Result<(Index, ParsedMetadata)> {
+    ) -> Result<(Index, FjParsedSnapshotMetadata)> {
         // 1. Validate Request & Path
-        // Ensure snapshot_path is within the configured base_path/snapshots/
-        // For now, assume base_path is the parent of snapshots_path. A more robust check might be needed.
-        let snapshots_base_path = self.base_path.parent().ok_or_else(|| {
-            Error::InvalidSnapshotPath { path: snapshot_path.to_path_buf() }
-        })?; // Assuming data.ms/ is parent of indexes/
-        let snapshots_dir = snapshots_base_path.join("snapshots");
-
-        if !snapshot_path.starts_with(&snapshots_dir) || !snapshot_path.exists() {
+        // [meilisearchfj] Use configured snapshots_path
+        if !snapshot_path.starts_with(&self.snapshots_path) || !snapshot_path.exists() {
             return Err(Error::InvalidSnapshotPath { path: snapshot_path.to_path_buf() });
         }
 
         // Check if target_index_uid already exists
+        // [meilisearchfj] Use self.env for transaction
         let rtxn = self.env.read_txn()?;
         if self.index_exists(&rtxn, target_index_uid)? {
             return Err(Error::SnapshotImportTargetIndexExists {
@@ -621,31 +666,38 @@ impl IndexMapper {
 
         // 3. Parse Metadata & Version Check
         let metadata_file = fs::File::open(&metadata_path)?;
-        let metadata: ParsedMetadata = serde_json::from_reader(metadata_file)
-            .map_err(|e| Error::InvalidSnapshotFormat { path: snapshot_path.to_path_buf() })?; // Consider a more specific error
+        let metadata: FjParsedSnapshotMetadata = serde_json::from_reader(metadata_file)
+            .map_err(|_e| Error::InvalidSnapshotFormat { path: snapshot_path.to_path_buf() })?; // Prefix unused 'e'
 
-        let (current_major, current_minor, _) = versioning::VERSION_MAJOR_MINOR_PATCH;
+        // Use the imported version constants directly
+        let (current_major, current_minor, _) = (
+            VERSION_MAJOR.parse().unwrap_or(0),
+            VERSION_MINOR.parse().unwrap_or(0),
+            VERSION_PATCH.parse().unwrap_or(0),
+        );
         let snapshot_version_str = &metadata.meilisearch_version;
         let snapshot_version_parts: Vec<&str> = snapshot_version_str.split('.').collect();
+        // Construct current version string for comparison
+        let current_version_string = format!("{}.{}.{}", VERSION_MAJOR, VERSION_MINOR, VERSION_PATCH);
         if snapshot_version_parts.len() < 2 {
             return Err(Error::SnapshotVersionMismatch {
                 path: snapshot_path.to_path_buf(),
                 snapshot_version: snapshot_version_str.clone(),
-                current_version: versioning::VERSION_STRING.to_string(),
+                current_version: current_version_string,
             });
         }
         let snapshot_major: u32 = snapshot_version_parts[0].parse().map_err(|_| {
             Error::SnapshotVersionMismatch {
                 path: snapshot_path.to_path_buf(),
                 snapshot_version: snapshot_version_str.clone(),
-                current_version: versioning::VERSION_STRING.to_string(),
+                current_version: current_version_string.clone(),
             }
         })?;
         let snapshot_minor: u32 = snapshot_version_parts[1].parse().map_err(|_| {
             Error::SnapshotVersionMismatch {
                 path: snapshot_path.to_path_buf(),
                 snapshot_version: snapshot_version_str.clone(),
-                current_version: versioning::VERSION_STRING.to_string(),
+                current_version: current_version_string.clone(),
             }
         })?;
 
@@ -653,7 +705,7 @@ impl IndexMapper {
             return Err(Error::SnapshotVersionMismatch {
                 path: snapshot_path.to_path_buf(),
                 snapshot_version: snapshot_version_str.clone(),
-                current_version: versioning::VERSION_STRING.to_string(),
+                current_version: current_version_string,
             });
         }
 
@@ -664,6 +716,7 @@ impl IndexMapper {
         fs::rename(data_mdb_path, index_path.join("data.mdb"))?; // Move data.mdb
 
         // 5. Register, Open, and Map Index
+        // [meilisearchfj] Use self.env for transaction
         let mut wtxn = self.env.write_txn()?;
         let mut index_map = self.index_map.write().unwrap(); // Lock the index map
 
@@ -675,7 +728,7 @@ impl IndexMapper {
             unsafe { options.flags(milli::heed::EnvFlags::WRITE_MAP) };
         }
 
-        let index = milli::Index::new_with_creation_dates(
+        let _index = milli::Index::new_with_creation_dates( // Prefix unused 'index'
             options,
             &index_path,
             metadata.created_at,
@@ -687,30 +740,15 @@ impl IndexMapper {
         // Update the mapping table
         self.index_mapping.put(&mut wtxn, target_index_uid, &new_uuid)?;
 
-        // Insert into the LRU map using IndexMap::create logic adaptation
-        // We manually handle the insertion and potential eviction here as IndexMap::create
-        // assumes directory creation and initial index setup.
-        match index_map.available.insert(new_uuid, index.clone()) {
-            InsertionOutcome::InsertedNew => (), // Expected case
-            InsertionOutcome::Evicted(evicted_uuid, evicted_index) => {
-                // Use the existing close logic from IndexMap
-                index_map.close(evicted_uuid, evicted_index, self.enable_mdb_writemap, 0);
-            }
-            InsertionOutcome::Replaced(_) => {
-                // This should not happen due to the earlier check, but handle defensively
-                wtxn.abort(); // Abort transaction
-                drop(index_map); // Release lock
-                                 // Clean up created index directory? This path indicates a logic error.
-                return Err(Error::SnapshotImportFailed {
-                    target_index_uid: target_index_uid.to_string(),
-                    source: "Attempted to replace an existing index UUID in the map during import"
-                        .into(),
-                });
-            }
-        }
+        // [meilisearchfj] Use the new method to insert the already opened index
+        let index = index_map.fj_insert_opened_index(
+            new_uuid,
+            _index, // Pass the index opened above
+            self.enable_mdb_writemap,
+        );
 
-        // Store initial stats (or stats from metadata if available?)
-        // For now, compute fresh stats after import.
+        // Store initial stats after successful import and insertion into map.
+        // Compute fresh stats after import.
         let index_rtxn = index.read_txn()?;
         let stats = crate::index_mapper::IndexStats::new(&index, &index_rtxn)
             .map_err(|e| Error::from_milli(e, Some(target_index_uid.to_string())))?;

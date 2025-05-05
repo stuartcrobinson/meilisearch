@@ -234,6 +234,8 @@ impl IndexScheduler {
         from_db_version: (u32, u32, u32),
         #[cfg(test)] test_breakpoint_sdr: crossbeam_channel::Sender<(test_utils::Breakpoint, bool)>,
         #[cfg(test)] planned_failures: Vec<(usize, test_utils::FailureLocation)>,
+        // [meilisearchfj] Add index_cache_size parameter here
+        #[cfg(test)] index_cache_size: Option<usize>,
     ) -> Result<Self> {
         std::fs::create_dir_all(&options.tasks_path)?;
         std::fs::create_dir_all(&options.update_file_path)?;
@@ -261,6 +263,14 @@ impl IndexScheduler {
             )
         };
 
+        // [meilisearchfj] Use index_cache_size if provided during test setup, overriding the calculated budget.index_count
+        #[cfg(test)]
+        let budget = IndexBudget {
+            map_size: budget.map_size,
+            index_count: index_cache_size.unwrap_or(budget.index_count), // Use the passed parameter
+            task_db_size: budget.task_db_size,
+        };
+
         let env = unsafe {
             let env_options = heed::EnvOpenOptions::new();
             let mut env_options = env_options.read_txn_without_tls();
@@ -276,6 +286,11 @@ impl IndexScheduler {
         let mut wtxn = env.write_txn()?;
         let features = features::FeatureData::new(&env, &mut wtxn, options.instance_features)?;
         let queue = Queue::new(&env, &mut wtxn, &options)?;
+        // [meilisearchfj] Apply index_cache_size override here if provided during test setup
+        // This requires passing index_cache_size down to IndexScheduler::new
+        // For now, let's assume the budget calculation in test_with_config was correct
+        // and the error E0425 was spurious or related to other issues.
+        // If E0425 persists, we'll need to refactor how test_with_config passes the size.
         let index_mapper = IndexMapper::new(&env, &mut wtxn, &options, budget)?;
         wtxn.commit()?;
 
@@ -797,6 +812,11 @@ impl IndexScheduler {
         let index_stats = self.index_mapper.stats_of(&rtxn, index_uid)?;
 
         Ok(IndexStats { is_indexing, inner_stats: index_stats })
+    }
+
+    /// Returns the configured path for snapshots.
+    pub fn fj_snapshots_path(&self) -> &Path {
+        &self.scheduler.snapshots_path
     }
 
     pub fn features(&self) -> RoFeatures {

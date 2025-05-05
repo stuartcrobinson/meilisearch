@@ -382,6 +382,11 @@ TooManyVectors                        , InvalidRequest       , BAD_REQUEST ;
 UnretrievableDocument                 , Internal             , BAD_REQUEST ;
 UnretrievableErrorCode                , InvalidRequest       , BAD_REQUEST ;
 UnsupportedMediaType                  , InvalidRequest       , UNSUPPORTED_MEDIA_TYPE ;
+// [meilisearchfj] Added single index snapshot error codes
+InvalidSnapshotFormat                 , InvalidRequest       , BAD_REQUEST ;
+SnapshotImportFailed                  , Internal             , INTERNAL_SERVER_ERROR ;
+SnapshotVersionMismatch               , InvalidRequest       , BAD_REQUEST ;
+InvalidSnapshotPath                   , InvalidRequest       , BAD_REQUEST ;
 
 // Experimental features
 VectorEmbeddingError                  , InvalidRequest       , BAD_REQUEST ;

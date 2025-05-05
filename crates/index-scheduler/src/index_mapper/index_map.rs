@@ -182,7 +182,8 @@ impl IndexMap {
         match self.available.insert(*uuid, index.clone()) {
             InsertionOutcome::InsertedNew => (),
             InsertionOutcome::Evicted(evicted_uuid, evicted_index) => {
-                self.close(evicted_uuid, evicted_index, enable_mdb_writemap, 0);
+                // Call the internal close method directly here
+                self.fj_close_internal(evicted_uuid, evicted_index, enable_mdb_writemap, 0);
             }
             InsertionOutcome::Replaced(_) => {
                 panic!("Attempt to open an index that was already opened")
@@ -190,6 +191,29 @@ impl IndexMap {
         }
         Ok(index)
     }
+
+    /// [meilisearchfj] Inserts an already opened index into the map, handling eviction.
+    pub fn fj_insert_opened_index(
+        &mut self,
+        uuid: Uuid,
+        index: Index,
+        enable_mdb_writemap: bool, // Needed for closing evicted index
+    ) -> Index {
+        match self.available.insert(uuid, index.clone()) {
+            InsertionOutcome::InsertedNew => (), // Successfully inserted
+            InsertionOutcome::Evicted(evicted_uuid, evicted_index) => {
+                // Handle eviction by closing the evicted index
+                self.fj_close_internal(evicted_uuid, evicted_index, enable_mdb_writemap, 0);
+            }
+            InsertionOutcome::Replaced(_) => {
+                // This case should ideally not happen if UUIDs are unique,
+                // but panic defensively as it indicates a logic error.
+                panic!("Attempt to insert an opened index with a UUID that already exists in the available map")
+            }
+        }
+        index // Return the originally passed index
+    }
+
 
     /// Increases the current generation. See documentation for this field.
     ///
@@ -224,10 +248,11 @@ impl IndexMap {
         let Some(index) = self.available.remove(uuid) else {
             return;
         };
-        self.close(*uuid, index, enable_mdb_writemap, map_size_growth);
+        self.fj_close_internal(*uuid, index, enable_mdb_writemap, map_size_growth);
     }
 
-    fn close(
+    /// [meilisearchfj] Internal close logic, previously `close`.
+    fn fj_close_internal(
         &mut self,
         uuid: Uuid,
         index: Index,
@@ -293,6 +318,28 @@ impl IndexMap {
             "Attempt to finish deletion of an index that was being closed"
         );
     }
+
+    /// [meilisearchfj] Public method to handle closing an index due to LRU eviction.
+    /// Calls the internal closing logic with no size growth.
+    #[allow(dead_code)] // Allow dead code as it's called internally on eviction
+    pub fn fj_close_evicted_index(
+        &mut self,
+        uuid: Uuid,
+        index: Index,
+        enable_mdb_writemap: bool,
+    ) {
+        self.fj_close_internal(uuid, index, enable_mdb_writemap, 0);
+    }
+
+    /// [meilisearchfj] Returns the number of available indexes in the LRU cache.
+    pub fn fj_available_len(&self) -> usize {
+        self.available.len() // Call the public len() method of LruMap
+    }
+
+    /// [meilisearchfj] Returns the number of unavailable indexes.
+    pub fn fj_unavailable_len(&self) -> usize {
+        self.unavailable.len()
+    }
 }
 
 /// Create or open an index in the specified path.
@@ -328,7 +375,7 @@ fn create_or_open_index(
     } else {
         Ok(Index::new(options, path, creation)?)
     }
-}
+} // Add missing closing brace for create_or_open_index
 
 /// Putting the tests of the LRU down there so we have access to the cache's private members
 #[cfg(test)]

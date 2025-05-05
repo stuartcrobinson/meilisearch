@@ -54,6 +54,13 @@ pub(crate) enum Batch {
     SingleIndexSnapshotCreation {
         task: Task,
     },
+    // [meilisearchfj] Added for single index snapshot import
+    #[allow(dead_code)] // Allow dead code as this is not yet triggered by API
+    SingleIndexSnapshotImport {
+        source_snapshot_path: String,
+        target_index_uid: String,
+        task: Task,
+    },
 }
 
 #[derive(Debug)]
@@ -135,8 +142,12 @@ impl Batch {
             Batch::IndexSwap { task } => {
                 RoaringBitmap::from_sorted_iter(std::iter::once(task.uid)).unwrap()
             }
-            // [meilisearchfj] Added for single index snapshot
+            // [meilisearchfj] Added for single index snapshot creation
             Batch::SingleIndexSnapshotCreation { task } => {
+                RoaringBitmap::from_sorted_iter(std::iter::once(task.uid)).unwrap()
+            }
+            // [meilisearchfj] Added for single index snapshot import
+            Batch::SingleIndexSnapshotImport { task, .. } => {
                 RoaringBitmap::from_sorted_iter(std::iter::once(task.uid)).unwrap()
             }
         }
@@ -156,8 +167,10 @@ impl Batch {
             IndexCreation { index_uid, .. }
             | IndexUpdate { index_uid, .. }
             | IndexDeletion { index_uid, .. } => Some(index_uid),
-            // [meilisearchfj] Added for single index snapshot
+            // [meilisearchfj] Added for single index snapshot creation
             Batch::SingleIndexSnapshotCreation { task } => task.indexes().first().copied(),
+            // [meilisearchfj] Added for single index snapshot import
+            Batch::SingleIndexSnapshotImport { target_index_uid, .. } => Some(target_index_uid),
         }
     }
 }
@@ -178,8 +191,10 @@ impl fmt::Display for Batch {
             Batch::IndexDeletion { .. } => f.write_str("IndexDeletion")?,
             Batch::IndexSwap { .. } => f.write_str("IndexSwap")?,
             Batch::UpgradeDatabase { .. } => f.write_str("UpgradeDatabase")?,
-            // [meilisearchfj] Added for single index snapshot
+            // [meilisearchfj] Added for single index snapshot creation
             Batch::SingleIndexSnapshotCreation { .. } => f.write_str("SingleIndexSnapshotCreation")?,
+            // [meilisearchfj] Added for single index snapshot import
+            Batch::SingleIndexSnapshotImport { .. } => f.write_str("SingleIndexSnapshotImport")?,
         };
         match index_uid {
             Some(name) => f.write_fmt(format_args!(" on {name:?} from tasks: {tasks:?}")),

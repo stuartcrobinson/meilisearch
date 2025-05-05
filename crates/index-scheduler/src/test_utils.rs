@@ -83,9 +83,10 @@ impl IndexScheduler {
         })
     }
 
+    // [meilisearchfj] Modified to accept optional cache_size
     pub(crate) fn test_with_custom_config(
         planned_failures: Vec<(usize, FailureLocation)>,
-        configuration: impl Fn(&mut IndexSchedulerOptions) -> Option<(u32, u32, u32)>,
+        mut configuration: impl FnMut(&mut IndexSchedulerOptions) -> Option<(u32, u32, u32)>, // Made mutable
     ) -> (Self, IndexSchedulerHandle) {
         let tempdir = TempDir::new().unwrap();
         let (sender, receiver) = crossbeam_channel::bounded(0);
@@ -117,6 +118,7 @@ impl IndexScheduler {
             auto_upgrade: true, // Don't cost much and will ensure the happy path works
             embedding_cache_cap: 10,
         };
+        // Call configuration closure, it might modify options (like index_count)
         let version = configuration(&mut options).unwrap_or_else(|| {
             (
                 versioning::VERSION_MAJOR.parse().unwrap(),
@@ -130,8 +132,15 @@ impl IndexScheduler {
 
         std::fs::create_dir_all(&options.auth_path).unwrap();
         let auth_env = open_auth_store_env(&options.auth_path).unwrap();
-        let index_scheduler =
-            Self::new(options, auth_env, version, sender, planned_failures).unwrap();
+        let index_scheduler = Self::new(
+            options,
+            auth_env,
+            version,
+            sender,
+            planned_failures,
+            None, // Add None for index_cache_size
+        )
+        .unwrap();
 
         // To be 100% consistent between all test we're going to start the scheduler right now
         // and ensure it's in the expected starting state.

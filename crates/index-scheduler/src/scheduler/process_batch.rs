@@ -1,4 +1,5 @@
-use std::collections::{BTreeSet, HashMap, HashSet};
+use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet}; // Add BTreeMap
+use std::ops::Deref; // Import Deref trait
 use std::panic::{catch_unwind, AssertUnwindSafe};
 use std::sync::atomic::Ordering;
 
@@ -7,10 +8,18 @@ use meilisearch_types::heed::{RoTxn, RwTxn};
 use meilisearch_types::milli::progress::{Progress, VariableNameStep};
 use meilisearch_types::milli::{self, ChannelCongestion};
 use meilisearch_types::tasks::{Details, IndexSwap, KindWithContent, Status, Task};
+use milli::order_by_map::OrderByMap; // Import OrderByMap
 use milli::update::Settings as MilliSettings;
+use std::path::PathBuf; // Re-add PathBuf as it's used in process_single_index_snapshot_import
+// use meilisearch_types::error::ResponseError; // Still unused
 use roaring::RoaringBitmap;
+// use time::OffsetDateTime; // Still unused
 
 use super::create_batch::Batch;
+use meilisearch_types::settings::SettingEmbeddingSettings; // Import the wrapper type
+use milli::update::Setting; // Use the public Setting enum from milli
+use milli::vector::settings as milli_vec_settings; // [meilisearchfj] Alias for milli vector settings
+// use crate::processing::ProcessingTasks; // Still unused
 use crate::processing::{
     AtomicBatchStep, AtomicTaskStep, CreateIndexProgress, DeleteIndexProgress, FinalizingIndexStep,
     InnerSwappingTwoIndexes, SwappingTheIndexes, TaskCancelationProgress, TaskDeletionProgress,
@@ -354,6 +363,19 @@ impl IndexScheduler {
             Batch::SingleIndexSnapshotCreation { task } => self // Remove `mut`
                 .process_single_index_snapshot_creation(progress, task)
                 .map(|task| (vec![task], ProcessBatchInfo::default())),
+            // [meilisearchfj] Add case for snapshot import batch
+            Batch::SingleIndexSnapshotImport {
+                source_snapshot_path,
+                target_index_uid,
+                task,
+            } => self // Ensure 'self' is used correctly here
+                .process_single_index_snapshot_import( // Ensure method name matches definition
+                    progress,
+                    task,
+                    source_snapshot_path,
+                    target_index_uid,
+                )
+                .map(|task| (vec![task], ProcessBatchInfo::default())),
             Batch::UpgradeDatabase { mut tasks } => {
                 let KindWithContent::UpgradeDatabase { from } = tasks.last().unwrap().kind else {
                     unreachable!();
@@ -442,8 +464,10 @@ impl IndexScheduler {
         // 6. Swap in the index mapper
         self.index_mapper.swap(wtxn, lhs, rhs)?;
 
-        Ok(())
+        Ok(()) // Add Ok(()) to match Result<()> return type
     }
+
+    // [meilisearchfj] Removed erroneous duplicate function definition
 
     /// Delete each given task from all the databases (if it is deleteable).
     ///
@@ -774,4 +798,137 @@ impl IndexScheduler {
 
         Ok(task)
     }
+
+    // [meilisearchfj] Re-add method definition for snapshot import processing
+    #[tracing::instrument(level = "trace", skip(self, _progress, task), target = "indexing::scheduler")] // Ensure progress is prefixed
+    fn process_single_index_snapshot_import(
+        &self,
+        _progress: Progress, // Ensure progress is prefixed
+        mut task: Task,
+        source_snapshot_path: String, // Pass ownership
+        target_index_uid: String,   // Pass ownership
+    ) -> Result<Task> {
+        // Wrap the core import and settings application logic in a closure
+        // to easily handle errors and update the task status.
+        // TODO: Add progress reporting steps (Step 7)
+        let import_and_settings_result: Result<()> = (|| {
+            let snapshot_path = PathBuf::from(&source_snapshot_path); // Borrow path for IndexMapper
+
+            // 1. Call IndexMapper to import the index data
+            let (imported_index, parsed_metadata) = self
+                .index_mapper
+                .fj_import_index_from_snapshot(&target_index_uid, &snapshot_path)?;
+
+            // 2. Apply settings from the snapshot metadata
+            let mut index_wtxn = imported_index.write_txn().map_err(|e| {
+                Error::from_milli(e.into(), Some(target_index_uid.to_string()))
+            })?;
+
+            let mut settings_builder = milli::update::Settings::new(
+                &mut index_wtxn,
+                &imported_index,
+                self.indexer_config(),
+            );
+
+            // Apply all settings from the parsed metadata
+            // Call individual setters based on parsed_metadata.settings
+            // Assuming parsed_metadata.settings is Settings<Unchecked>
+            let settings = parsed_metadata.settings;
+            // Use correct method names from milli::update::Settings
+            if let Setting::Set(val) = settings.displayed_attributes.deref() { settings_builder.set_displayed_fields(val.clone()); } // Explicitly deref WildcardSetting
+            if let Setting::Set(val) = settings.searchable_attributes.deref() { settings_builder.set_searchable_fields(val.clone()); } // Explicitly deref WildcardSetting
+            if let Setting::Set(val) = settings.filterable_attributes { settings_builder.set_filterable_fields(val); } // Use correct method name
+            if let Setting::Set(val) = settings.sortable_attributes { settings_builder.set_sortable_fields(val.into_iter().collect()); }
+            if let Setting::Set(val) = settings.ranking_rules { settings_builder.set_criteria(val.into_iter().map(|r| r.into()).collect()); }
+            if let Setting::Set(val) = settings.stop_words { settings_builder.set_stop_words(val); }
+            if let Setting::Set(val) = settings.synonyms { settings_builder.set_synonyms(val); }
+            if let Setting::Set(val) = settings.distinct_attribute { settings_builder.set_distinct_field(val); }
+            // Typo Tolerance Settings
+            if let Setting::Set(typo_settings) = settings.typo_tolerance {
+                if let Setting::Set(val) = typo_settings.enabled { settings_builder.set_autorize_typos(val); }
+                // Access fields inside the MinWordSizeTyposSetting struct
+                if let Setting::Set(min_word_size) = typo_settings.min_word_size_for_typos {
+                    if let Setting::Set(val) = min_word_size.one_typo { settings_builder.set_min_word_len_one_typo(val); }
+                    if let Setting::Set(val) = min_word_size.two_typos { settings_builder.set_min_word_len_two_typos(val); }
+                }
+                if let Setting::Set(val) = typo_settings.disable_on_words { settings_builder.set_exact_words(val); }
+                if let Setting::Set(val) = typo_settings.disable_on_attributes { settings_builder.set_exact_attributes(val.into_iter().collect()); } // Convert BTreeSet to HashSet
+            }
+            // Faceting Settings
+            if let Setting::Set(faceting_settings) = settings.faceting {
+                if let Setting::Set(val) = faceting_settings.max_values_per_facet { settings_builder.set_max_values_per_facet(val); }
+                if let Setting::Set(val) = faceting_settings.sort_facet_values_by {
+                    // Manual conversion from types::OrderByMap to milli::OrderByMap
+                    let milli_order_by_map = val.into_iter().map(|(k, v)| (k, v.into())).collect();
+                    settings_builder.set_sort_facet_values_by(OrderByMap::from(milli_order_by_map)); // Use imported OrderByMap
+                }
+            }
+            // Pagination Settings
+            if let Setting::Set(pagination_settings) = settings.pagination {
+                if let Setting::Set(val) = pagination_settings.max_total_hits { settings_builder.set_pagination_max_total_hits(val); }
+            }
+            if let Setting::Set(val) = settings.proximity_precision { settings_builder.set_proximity_precision(val.into()); }
+            // Embedder Settings
+            if let Setting::Set(embedders) = settings.embedders {
+                let converted_embedders = fj_convert_embedder_settings(embedders)?;
+                settings_builder.set_embedder_settings(converted_embedders);
+            }
+            // Add other settings as needed...
+
+            // Execute settings application
+            let must_stop_processing = self.scheduler.must_stop_processing.clone();
+            settings_builder
+                .execute(|_| {}, || must_stop_processing.get()) // No detailed progress for now
+                .map_err(|e| Error::from_milli(e, Some(target_index_uid.to_string())))?;
+
+            index_wtxn.commit().map_err(|e| {
+                Error::from_milli(e.into(), Some(target_index_uid.to_string()))
+            })?;
+
+            Ok(())
+        })();
+
+        // 3. Update task status based on the result
+        match import_and_settings_result {
+            Ok(_) => {
+                // Extract source UID from path for details
+                let source_snapshot_uid = PathBuf::from(&source_snapshot_path)
+                    .file_stem()
+                    .and_then(|s| s.to_str())
+                    .map(|s| s.split_once('-').map(|(_, uid)| uid).unwrap_or(s))
+                    .unwrap_or(&source_snapshot_path) // Use full path as fallback
+                    .to_string();
+
+                task.details = Some(Details::SingleIndexSnapshotImport {
+                    source_snapshot_uid,
+                    target_index_uid, // Use owned target_index_uid
+                });
+                task.status = Status::Succeeded;
+                task.error = None; // Clear any previous error if retrying
+            }
+            Err(e) => {
+                task.status = Status::Failed;
+                task.error = Some(e.into());
+                // Ensure details reflect failure
+                task.details = task.kind.default_details().map(|d| d.to_failed());
+            }
+        }
+
+        Ok(task)
+    }
+}
+
+// [meilisearchfj] Helper function to convert embedder settings types
+fn fj_convert_embedder_settings(
+    // Accept the wrapper type from meilisearch-types
+    types_embedders: BTreeMap<String, SettingEmbeddingSettings>,
+) -> Result<BTreeMap<String, Setting<milli_vec_settings::EmbeddingSettings>>> {
+    types_embedders
+        .into_iter()
+        .map(|(name, setting_wrapper)| {
+            // The inner type is already the milli::vector::settings::EmbeddingSettings we need
+            let milli_setting = setting_wrapper.inner;
+            Ok((name, milli_setting))
+        })
+        .collect()
 }
