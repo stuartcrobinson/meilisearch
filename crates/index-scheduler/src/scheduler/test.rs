@@ -1066,7 +1066,7 @@ mod msfj_sis_scheduler_import_tests {
 
         // 1. Create source index and add settings including embedders
         let task = index_creation_task(source_index, Some("id"));
-        let task_id = index_scheduler.register(task, None, false).unwrap().uid;
+        let _task_id = index_scheduler.register(task, None, false).unwrap().uid; // Prefix unused task_id
         handle.advance_one_successful_batch(); // Use handle to process the task
 
         let index = index_scheduler.index(source_index).unwrap();

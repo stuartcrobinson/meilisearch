@@ -572,16 +572,20 @@ impl IndexScheduler {
                     return Ok(Some((Batch::IndexSwap { task }, current_batch)));
                 }
                 KindWithContent::SingleIndexSnapshotImport { source_snapshot_path, target_index_uid } => {
-                    current_batch.processing(Some(&mut task));
+                    // Extract fields before the mutable borrow
+                    let source_path = source_snapshot_path.clone();
+                    let target_uid = target_index_uid.clone();
+
+                    current_batch.processing(Some(&mut task)); // Now we can borrow mutably
                     current_batch.reason(BatchStopReason::TaskCannotBeBatched {
                         kind: Kind::SingleIndexSnapshotImport,
                         id: task.uid,
                     });
                     return Ok(Some((
                         Batch::SingleIndexSnapshotImport {
-                            source_snapshot_path: source_snapshot_path.clone(),
-                            target_index_uid: target_index_uid.clone(),
-                            task,
+                            source_snapshot_path: source_path, // Use cloned value
+                            target_index_uid: target_uid, // Use cloned value
+                            task, // Move the task
                         },
                         current_batch,
                     )));
