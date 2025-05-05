@@ -15,8 +15,8 @@ use std::fs::File;
 
 use crate::insta_snapshot::snapshot_index_scheduler;
 use crate::test_utils::Breakpoint::*;
-// Use test_utils for handle_tasks and TempIndex
-use crate::test_utils::{handle_tasks, TempIndex};
+// Use test_utils for TempIndex, handle_tasks import handled inside module
+use crate::test_utils::TempIndex; // Keep TempIndex import here
 use crate::test_utils::{
     index_creation_task, read_json, replace_document_import_task, sample_documents,
 };
@@ -942,22 +942,24 @@ fn create_and_list_index() {
 mod msfj_sis_scheduler_import_tests {
     use super::*; // Keep import from parent
     // Move necessary imports inside the module
-    use crate::test_utils::handle_tasks; // Use test_utils
+    // Try compiler suggested path for handle_tasks
+    use crate::scheduler::test::handle_tasks;
     use meilisearch_types::milli::vector::settings::{EmbedderSource, EmbeddingSettings};
     // Removed unused import: SettingEmbeddingSettings
     use meilisearch_types::tasks::KindWithContent;
     use tempfile::tempdir;
-    use std::collections::BTreeMap; // Removed unused HashSet import
-    use big_s::S; // Import S
-    use std::path::PathBuf; // Import PathBuf
-    use std::fs::File;
+    use std::collections::BTreeMap;
+    use big_s::S;
+    use std::path::PathBuf;
+    use std::fs::File; // Keep File import as it's used in test_import_snapshot_invalid_format and test_import_snapshot_version_mismatch
     use std::io::Write;
     use crate::{IndexScheduler, fj_snapshot_utils};
     use crate::test_utils::index_creation_task;
     use meilisearch_types::tasks::{Details, Status};
-    use milli::FilterableAttributesRule; // Import from milli
+    use milli::FilterableAttributesRule;
     use milli::update::Setting;
-    use meilisearch_types::error::ErrorCode; // Import ErrorCode trait for error_code() method
+    // Removed unused ErrorCode import
+    use actix_web::http::StatusCode; // Import StatusCode for error checking
 
     // Helper to create a valid snapshot for import tests
     // Moved inside the module
@@ -1150,9 +1152,9 @@ mod msfj_sis_scheduler_import_tests {
         let task = index_scheduler.queue.tasks.get_task(&rtxn, task_id).unwrap().unwrap();
         assert_eq!(task.status, Status::Failed);
         assert!(task.error.is_some());
-        // Use direct field access for error_code
-        let error_code = task.error.as_ref().unwrap().error_code;
-        assert_eq!(error_code, meilisearch_types::error::Code::IndexAlreadyExists);
+        // Check the public StatusCode field
+        let status_code = task.error.as_ref().unwrap().code;
+        assert_eq!(status_code, StatusCode::CONFLICT); // IndexAlreadyExists maps to CONFLICT
         match task.details {
             Some(Details::SingleIndexSnapshotImport { .. }) => {} // Expected structure
             _ => panic!("Incorrect task details for failed import: {:?}", task.details),
@@ -1181,10 +1183,10 @@ mod msfj_sis_scheduler_import_tests {
         let task = index_scheduler.queue.tasks.get_task(&rtxn, task_id).unwrap().unwrap();
         assert_eq!(task.status, Status::Failed);
         assert!(task.error.is_some());
-        // Use direct field access for error_code
-        let error_code = task.error.as_ref().unwrap().error_code;
-        // Depending on exact failure (non-existent vs outside dir), code might vary slightly
-        assert!(matches!(error_code, meilisearch_types::error::Code::InvalidSnapshotPath | meilisearch_types::error::Code::SnapshotImportFailed));
+        // Check the public StatusCode field
+        let status_code = task.error.as_ref().unwrap().code;
+        // InvalidSnapshotPath maps to BAD_REQUEST, SnapshotImportFailed maps to INTERNAL_SERVER_ERROR
+        assert!(matches!(status_code, StatusCode::BAD_REQUEST | StatusCode::INTERNAL_SERVER_ERROR));
     }
 
     #[test]
@@ -1214,10 +1216,10 @@ mod msfj_sis_scheduler_import_tests {
         let task = index_scheduler.queue.tasks.get_task(&rtxn, task_id).unwrap().unwrap();
         assert_eq!(task.status, Status::Failed);
         assert!(task.error.is_some());
-        // Use direct field access for error_code
-        let error_code = task.error.as_ref().unwrap().error_code;
-         // Expect SnapshotImportFailed wrapping the underlying format error
-        assert_eq!(error_code, meilisearch_types::error::Code::SnapshotImportFailed);
+        // Check the public StatusCode field
+        let status_code = task.error.as_ref().unwrap().code;
+         // SnapshotImportFailed maps to INTERNAL_SERVER_ERROR
+        assert_eq!(status_code, StatusCode::INTERNAL_SERVER_ERROR);
     }
 
      #[test]
@@ -1271,8 +1273,8 @@ mod msfj_sis_scheduler_import_tests {
         let task = index_scheduler.queue.tasks.get_task(&rtxn, task_id).unwrap().unwrap();
         assert_eq!(task.status, Status::Failed);
         assert!(task.error.is_some());
-        // Use direct field access for error_code
-        let error_code = task.error.as_ref().unwrap().error_code;
-        assert_eq!(error_code, meilisearch_types::error::Code::SnapshotVersionMismatch);
+        // Check the public StatusCode field
+        let status_code = task.error.as_ref().unwrap().code;
+        assert_eq!(status_code, StatusCode::BAD_REQUEST); // SnapshotVersionMismatch maps to BAD_REQUEST
     }
 }
