@@ -1475,10 +1475,10 @@ mod msfj_sis_scheduler_import_tests {
         use milli::order_by_map::OrderByMap; // Added import
         use milli::OrderBy; // Added import
         use milli::AttributePatterns; // Added import for E0308 fix
-        // Corrected Locale import path
-        use milli::documents::locale::Locale;
+        // Corrected Locale import path again
+        use milli::locale::Language; // It expects Language, not Locale
         use std::collections::{BTreeMap, BTreeSet, HashSet};
-        // Removed unused FromStr import
+        use std::str::FromStr; // Re-add FromStr for Language parsing
 
         let (index_scheduler, mut handle) = IndexScheduler::test(true, vec![]);
         let source_index = "source_index_all_settings";
@@ -1528,8 +1528,8 @@ mod msfj_sis_scheduler_import_tests {
         settings.set_dictionary(BTreeSet::from(["wordA".to_string(), "wordB".to_string()]));
         settings.set_search_cutoff(100);
         // DIAGNOSE: Check the type of PrefixSearch being constructed
-        // Corrected PrefixSearch construction (use Enable variant)
-        let prefix_search_value = dbg!(PrefixSearch::Enable { min_prefix_length: 3 });
+        // Corrected PrefixSearch construction (try Enabled variant again)
+        let prefix_search_value = dbg!(PrefixSearch::Enabled { min_prefix_length: 3 });
         settings.set_prefix_search(prefix_search_value); // Use imported milli::index::PrefixSearch
         settings.set_facet_search(FacetSearchSettings { enabled: true, max_candidates: 10 }); // Use imported FacetSearchSettings
 
@@ -1610,9 +1610,8 @@ mod msfj_sis_scheduler_import_tests {
         let expected_localized_view = dbg!(vec![LocalizedAttributesRuleView {
             // Corrected AttributePatterns construction
             attribute_patterns: AttributePatterns { patterns: vec!["title#fr".to_string()] },
-            // Corrected Locale construction (assuming direct string conversion or specific constructor)
-            // Let's try direct construction if FromStr isn't the way
-            locales: vec![Locale::from_str("title").unwrap()], // Keep FromStr for now, might need adjustment
+            // Corrected Locale construction (use Language::from_str)
+            locales: vec![Language::from_str("title").unwrap()],
         }]);
         // Corrected assertion for localized attributes
         let expected_localized_milli: Vec<LocalizedAttributesRule> = expected_localized_view.into_iter().map(|v| v.into()).collect();
@@ -1637,8 +1636,8 @@ mod msfj_sis_scheduler_import_tests {
         // Verify Prefix Search (Compare milli::index::PrefixSearch)
         let prefix_search = imported_index.prefix_search(&index_rtxn).unwrap();
         // DIAGNOSE: Check the type of expected_prefix_search
-        // Corrected expected_prefix_search construction (use Enable variant)
-        let expected_prefix_search = dbg!(PrefixSearch::Enable { min_prefix_length: 3 }); // Use milli::index::PrefixSearch::Enable
+        // Corrected expected_prefix_search construction (try Enabled variant again)
+        let expected_prefix_search = dbg!(PrefixSearch::Enabled { min_prefix_length: 3 }); // Use milli::index::PrefixSearch::Enabled
         assert_eq!(prefix_search, expected_prefix_search);
 
         // Verify Facet Search
