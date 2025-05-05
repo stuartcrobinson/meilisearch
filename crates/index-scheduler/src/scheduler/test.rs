@@ -1465,8 +1465,8 @@ mod msfj_sis_scheduler_import_tests {
         // Let's try importing the parent and see what the compiler suggests for facet
         // use meilisearch_types::settings; // Keep this commented unless needed
 
-        // Corrected facet import path again
-        use meilisearch_types::settings::facet::{FacetSearchSettings, OrderByType};
+        // Corrected facet import path - Assuming they are directly under settings
+        use meilisearch_types::settings::{FacetSearchSettings, OrderByType};
         // Removed unused: PrefixSearchSettings, FacetingSettings, MinWordSizeForTypos, PaginationSettings, TypoToleranceSettings
         use milli::index::PrefixSearch; // Correct path
         use milli::proximity::ProximityPrecision; // Correct path
@@ -1475,10 +1475,10 @@ mod msfj_sis_scheduler_import_tests {
         use milli::order_by_map::OrderByMap; // Added import
         use milli::OrderBy; // Added import
         use milli::AttributePatterns; // Added import for E0308 fix
-        // Corrected Locale import path again
-        use milli::locale::Language; // It expects Language, not Locale
+        // Corrected Language import path - Assuming it's under milli::lang
+        use milli::lang::Language;
         use std::collections::{BTreeMap, BTreeSet, HashSet};
-        use std::str::FromStr; // Re-add FromStr for Language parsing
+        use std::str::FromStr; // Keep FromStr for Language parsing
 
         let (index_scheduler, mut handle) = IndexScheduler::test(true, vec![]);
         let source_index = "source_index_all_settings";
@@ -1510,7 +1510,7 @@ mod msfj_sis_scheduler_import_tests {
         // dbg!(milli::OrderBy::*); // This won't compile, let's check the type itself
         // Let's try using a known variant if available, or check definition
         // sort_facet_values_by.insert("size".to_string(), dbg!(milli::OrderBy::Asc)); // Example check
-        // Corrected OrderBy variant usage
+        // Assuming OrderBy::Desc exists, keep as is for now
         sort_facet_values_by.insert("size".to_string(), OrderBy::Desc);
         settings.set_sort_facet_values_by(OrderByMap::from(sort_facet_values_by)); // Use imported OrderByMap
 
@@ -1566,14 +1566,14 @@ mod msfj_sis_scheduler_import_tests {
         assert!(task.error.is_none());
 
         assert!(index_scheduler.index_exists(target_index).unwrap());
-        // Explicitly type annotate imported_index
-        let imported_index: milli::Index = index_scheduler.index(target_index).unwrap();
+        // Remove explicit type annotation, let compiler infer
+        let imported_index = index_scheduler.index(target_index).unwrap();
         // DIAGNOSE: Check the type of imported_index - REMOVED due to E0277
         // dbg!(&imported_index);
         let index_rtxn = imported_index.read_txn().unwrap();
 
         // Verify Typo Tolerance
-        // DIAGNOSE: Check if typo_tolerance method exists and its return type
+        // DIAGNOSE: dbg! the method call itself to see if it resolves
         let typo_tolerance = dbg!(imported_index.typo_tolerance(&index_rtxn)).unwrap();
         assert_eq!(typo_tolerance.enabled, false);
         assert_eq!(typo_tolerance.min_word_size_for_typos.one_typo, 6);
@@ -1586,12 +1586,12 @@ mod msfj_sis_scheduler_import_tests {
         assert_eq!(faceting.max_values_per_facet, 50);
         let expected_sort_by: BTreeMap<String, OrderByType> =
             BTreeMap::from([("size".to_string(), OrderByType::Desc)]);
-        // DIAGNOSE: Check if faceting method exists and its return type
+        // DIAGNOSE: dbg! the method call itself
         let faceting = dbg!(imported_index.faceting(&index_rtxn)).unwrap();
         assert_eq!(faceting.sort_facet_values_by, expected_sort_by);
 
         // Verify Pagination
-        // DIAGNOSE: Check if pagination method exists and its return type
+        // DIAGNOSE: dbg! the method call itself
         let pagination = dbg!(imported_index.pagination(&index_rtxn)).unwrap();
         assert_eq!(pagination.max_total_hits, 500);
 
@@ -1608,8 +1608,8 @@ mod msfj_sis_scheduler_import_tests {
         // We can't dbg! the struct definition directly, but let's check the constructed value
         // Corrected construction of expected_localized
         let expected_localized_view = dbg!(vec![LocalizedAttributesRuleView {
-            // Corrected AttributePatterns construction
-            attribute_patterns: AttributePatterns { patterns: vec!["title#fr".to_string()] },
+            // Use .into() for AttributePatterns as suggested by compiler
+            attribute_patterns: vec!["title#fr".to_string()].into(),
             // Corrected Locale construction (use Language::from_str)
             locales: vec![Language::from_str("title").unwrap()],
         }]);
@@ -1620,14 +1620,14 @@ mod msfj_sis_scheduler_import_tests {
 
         // Verify Tokenization Settings (Handle Option<&BTreeSet>)
         let expected_separators = BTreeSet::from(["&".to_string()]);
-        // Reverted tokenization assertions (compare Option<&BTreeSet<String>>)
-        assert_eq!(imported_index.separator_tokens(&index_rtxn).unwrap(), Some(&expected_separators));
+        // Apply .cloned() as suggested by compiler
+        assert_eq!(imported_index.separator_tokens(&index_rtxn).unwrap(), Some(&expected_separators).cloned());
 
         let expected_non_separators = BTreeSet::from(["#".to_string()]);
-        assert_eq!(imported_index.non_separator_tokens(&index_rtxn).unwrap(), Some(&expected_non_separators));
+        assert_eq!(imported_index.non_separator_tokens(&index_rtxn).unwrap(), Some(&expected_non_separators).cloned());
 
         let expected_dictionary = BTreeSet::from(["wordA".to_string(), "wordB".to_string()]);
-        assert_eq!(imported_index.dictionary(&index_rtxn).unwrap(), Some(&expected_dictionary));
+        assert_eq!(imported_index.dictionary(&index_rtxn).unwrap(), Some(&expected_dictionary).cloned());
 
 
         // Verify Search Cutoff
