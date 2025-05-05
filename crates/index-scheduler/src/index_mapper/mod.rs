@@ -751,8 +751,8 @@ impl IndexMapper {
         // Handle potential eviction
         // Use the full path to InsertionOutcome::Evicted
         if let crate::lru::InsertionOutcome::Evicted(evicted_uuid, evicted_index) = outcome {
-            // Call close directly on the RwLockWriteGuard (it dereferences to IndexMap)
-            index_map.close(evicted_uuid, evicted_index, self.enable_mdb_writemap, 0);
+            // Use the public method specifically for closing evicted indexes
+            index_map.fj_close_evicted_index(evicted_uuid, evicted_index, self.enable_mdb_writemap);
         }
 
         // The index we use is the one passed to fj_insert_opened_index
