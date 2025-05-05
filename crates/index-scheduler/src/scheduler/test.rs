@@ -1666,7 +1666,8 @@ mod msfj_sis_scheduler_e2e_tests {
     use meilisearch_types::locales::LocalizedAttributesRuleView;
     use meilisearch_types::milli::vector::settings::{EmbedderSource, EmbeddingSettings};
     // Corrected import paths for settings types using aliases found in dump reader
-    use meilisearch_types::settings::{MinWordSizeTyposSetting, Settings, TypoSettings, WildcardSetting, SettingEmbeddingSettings, Unchecked};
+    // Removed unused WildcardSetting
+    use meilisearch_types::settings::{MinWordSizeTyposSetting, Settings, TypoSettings, SettingEmbeddingSettings, Unchecked};
     use meilisearch_types::tasks::{Details, KindWithContent, Status};
     // Use milli::Criterion for ranking rules
     use milli::Criterion;
@@ -1695,7 +1696,8 @@ mod msfj_sis_scheduler_e2e_tests {
         // Add documents
         let (file, documents_count) = sample_documents(&index_scheduler, 0, 10); // 10 documents
         file.persist().unwrap();
-        let task = replace_document_import_task(&source_index_uid, Some("id"), 0, documents_count);
+        // Pass source_index_uid directly (it's already &'static str)
+        let task = replace_document_import_task(source_index_uid, Some("id"), 0, documents_count);
         let _task_id = index_scheduler.register(task, None, false).unwrap().uid;
         handle.advance_one_successful_batch();
 
