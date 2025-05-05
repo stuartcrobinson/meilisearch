@@ -1166,7 +1166,7 @@ mod msfj_sis_scheduler_import_tests {
 
         // 2. Create the snapshot
         let snapshot_path =
-            create_test_snapshot(&index_scheduler, &mut handle, source_index, &snapshot_filename); // Pass handle
+            create_test_snapshot(&index_scheduler, &mut handle, source_index); // Remove extra argument
 
         // 3. Register the import task
         let import_task = KindWithContent::SingleIndexSnapshotImport {
