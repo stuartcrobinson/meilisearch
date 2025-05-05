@@ -134,6 +134,14 @@ pub fn create_index_snapshot(
         tracing::warn!(target: "snapshot_creation", "Could not get parent directory for snapshot path: {:?}", snapshot_filepath);
     }
 
+    // Final attempt to sync the data to disk using fs::sync_data
+    if let Err(e) = std::fs::sync_data(&snapshot_filepath) {
+         tracing::warn!(target: "snapshot_creation", "Failed to fs::sync_data for snapshot file {:?}: {}", snapshot_filepath, e);
+         // Continue anyway
+    } else {
+        tracing::info!(target: "snapshot_creation", "Successfully fs::sync_data for snapshot file");
+    }
+
 
     // Verification moved to the caller (`create_test_snapshot`)
 
