@@ -962,12 +962,13 @@ mod msfj_sis_scheduler_import_tests {
     // Moved inside the module
     fn create_test_snapshot(
         index_scheduler: &IndexScheduler,
+        handle: &mut crate::test_utils::IndexSchedulerHandle, // Add handle parameter
         source_index_uid: &str,
         target_snapshot_name: &str,
     ) -> PathBuf {
         // 1. Create source index and add data/settings
         let task = index_creation_task(source_index_uid, Some("id"));
-        let task_id = index_scheduler.register(task, None, false).unwrap().uid;
+        let _task_id = index_scheduler.register(task, None, false).unwrap().uid; // Prefix unused task_id
         handle.advance_one_successful_batch(); // Use handle to process the task
 
         let index = index_scheduler.index(source_index_uid).unwrap();
@@ -1011,7 +1012,7 @@ mod msfj_sis_scheduler_import_tests {
         let snapshot_filename = format!("{}-test.snapshot.tar.gz", source_index);
 
         let snapshot_path =
-            create_test_snapshot(&index_scheduler, source_index, &snapshot_filename);
+            create_test_snapshot(&index_scheduler, &mut handle, source_index, &snapshot_filename); // Pass handle
 
         // Register the import task
         let import_task = KindWithContent::SingleIndexSnapshotImport {
@@ -1085,7 +1086,7 @@ mod msfj_sis_scheduler_import_tests {
 
         // 2. Create the snapshot
         let snapshot_path =
-            create_test_snapshot(&index_scheduler, source_index, &snapshot_filename);
+            create_test_snapshot(&index_scheduler, &mut handle, source_index, &snapshot_filename); // Pass handle
 
         // 3. Register the import task
         let import_task = KindWithContent::SingleIndexSnapshotImport {
@@ -1131,7 +1132,7 @@ mod msfj_sis_scheduler_import_tests {
         let snapshot_filename = format!("{}-test.snapshot.tar.gz", source_index);
 
         let snapshot_path =
-            create_test_snapshot(&index_scheduler, source_index, &snapshot_filename);
+            create_test_snapshot(&index_scheduler, &mut handle, source_index, &snapshot_filename); // Pass handle
 
         // Create the target index beforehand
         let creation_task = index_creation_task(target_index, Some("id"));
@@ -1234,7 +1235,7 @@ mod msfj_sis_scheduler_import_tests {
 
         // Create a valid snapshot first
         let snapshot_path =
-            create_test_snapshot(&index_scheduler, source_index, &snapshot_filename);
+            create_test_snapshot(&index_scheduler, &mut handle, source_index, &snapshot_filename); // Pass handle
 
         // Modify the metadata.json within the snapshot to have a different version
         let temp_extract_dir = tempdir().unwrap();
