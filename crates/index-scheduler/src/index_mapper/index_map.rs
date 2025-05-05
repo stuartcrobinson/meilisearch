@@ -321,11 +321,13 @@ impl IndexMap {
     }
 
     /// [meilisearchfj] Returns the number of available indexes in the LRU cache.
+    #[allow(dead_code)] // Silence warning until used
     pub fn fj_available_len(&self) -> usize {
         self.available.len() // Call the public len() method of LruMap
     }
 
     /// [meilisearchfj] Returns the number of unavailable indexes.
+    #[allow(dead_code)] // Silence warning until used
     pub fn fj_unavailable_len(&self) -> usize {
         self.unavailable.len()
     }

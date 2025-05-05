@@ -160,6 +160,7 @@ where
     /// The current number of elements in the cache map.
     ///
     /// This value is guaranteed to be less than or equal to [`Self::capacity`].
+    #[allow(dead_code)] // Silence warning until used
     pub fn len(&self) -> usize {
         self.0.len()
     }

@@ -128,11 +128,13 @@ pub enum IndexStatus {
 
 impl IndexStatus {
     /// [meilisearchfj] Helper to check if the status is Available.
+    #[allow(dead_code)] // Silence warning until used
     pub fn fj_is_available(&self) -> bool {
         matches!(self, Self::Available(_))
     }
 
     /// [meilisearchfj] Helper to check if the status is Closing.
+    #[allow(dead_code)] // Silence warning until used
     pub fn fj_is_closing(&self) -> bool {
         matches!(self, Self::Closing(_))
     }
@@ -361,21 +363,25 @@ impl IndexMapper {
     }
 
     /// [meilisearchfj] Returns the base path for indexes.
+    #[allow(dead_code)] // Silence warning until used
     pub fn fj_base_path(&self) -> &Path {
         &self.base_path
     }
 
     /// [meilisearchfj] Returns the number of indexes currently available in the LRU cache.
+    #[allow(dead_code)] // Silence warning until used
     pub fn fj_available_cache_len(&self) -> usize {
         self.index_map.read().unwrap().fj_available_len()
     }
 
     /// [meilisearchfj] Returns the number of indexes currently marked as unavailable (closing or deleting).
+    #[allow(dead_code)] // Silence warning until used
     pub fn fj_unavailable_cache_len(&self) -> usize {
         self.index_map.read().unwrap().fj_unavailable_len()
     }
 
     /// [meilisearchfj] Returns the status of an index in the cache.
+    #[allow(dead_code)] // Silence warning until used
     pub fn fj_index_status(&self, uuid: &Uuid) -> IndexStatus {
         self.index_map.read().unwrap().get(uuid)
     }
