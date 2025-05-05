@@ -1465,8 +1465,8 @@ mod msfj_sis_scheduler_import_tests {
         // Let's try importing the parent and see what the compiler suggests for facet
         // use meilisearch_types::settings; // Keep this commented unless needed
 
-        // Corrected facet import path - Guessing top-level
-        use meilisearch_types::{FacetSearchSettings, OrderByType};
+        // Corrected facet import path - Use FacetValuesSort, keep guessing FacetSearchSettings
+        use meilisearch_types::{FacetSearchSettings, FacetValuesSort};
         // Removed unused: PrefixSearchSettings, FacetingSettings, MinWordSizeForTypos, PaginationSettings, TypoToleranceSettings
         use milli::index::PrefixSearch; // Correct path
         use milli::proximity::ProximityPrecision; // Correct path
@@ -1583,11 +1583,11 @@ mod msfj_sis_scheduler_import_tests {
 
         // Verify Faceting (using individual getters)
         assert_eq!(imported_index.max_values_per_facet(&index_rtxn).unwrap(), Some(50));
-        // Define expected using the correct type from meilisearch_types
-        let expected_sort_by: BTreeMap<String, OrderByType> =
-            BTreeMap::from([("size".to_string(), OrderByType::Desc)]);
-        // Convert milli::OrderByMap to BTreeMap<String, meilisearch_types::settings::OrderByType> for comparison
-        let actual_sort_by: BTreeMap<String, OrderByType> = imported_index.sort_facet_values_by(&index_rtxn).unwrap().into_iter().map(|(k, v)| (k, v.into())).collect();
+        // Define expected using FacetValuesSort
+        let expected_sort_by: BTreeMap<String, FacetValuesSort> =
+            BTreeMap::from([("size".to_string(), FacetValuesSort::Count)]); // Assuming Desc maps to Count
+        // Convert milli::OrderByMap to BTreeMap<String, meilisearch_types::FacetValuesSort> for comparison
+        let actual_sort_by: BTreeMap<String, FacetValuesSort> = imported_index.sort_facet_values_by(&index_rtxn).unwrap().into_iter().map(|(k, v)| (k, v.into())).collect();
         assert_eq!(actual_sort_by, expected_sort_by);
 
 
