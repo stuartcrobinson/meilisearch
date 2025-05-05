@@ -1665,13 +1665,13 @@ mod msfj_sis_scheduler_e2e_tests {
     use meilisearch_types::facet_values_sort::FacetValuesSort;
     use meilisearch_types::locales::LocalizedAttributesRuleView;
     use meilisearch_types::milli::vector::settings::{EmbedderSource, EmbeddingSettings};
-    // Corrected import paths for settings types
-    use meilisearch_types::settings::{MinWordSizeForTypos, Settings, TypoToleranceSettings, WildcardSetting, SettingEmbeddingSettings, Unchecked};
+    // Corrected import paths for settings types using aliases found in dump reader
+    use meilisearch_types::settings::{MinWordSizeTyposSetting, Settings, TypoSettings, WildcardSetting, SettingEmbeddingSettings, Unchecked};
     use meilisearch_types::tasks::{Details, KindWithContent, Status};
+    // Use milli::Criterion for ranking rules
+    use milli::Criterion;
     use milli::index::PrefixSearch;
     use milli::proximity::ProximityPrecision;
-    // Corrected import path for RankingRule
-    use milli::update::settings::RankingRule;
     use milli::update::Setting;
     use milli::FilterableAttributesRule;
     // Removed unused OrderByMap import
@@ -1707,21 +1707,21 @@ mod msfj_sis_scheduler_e2e_tests {
         settings.filterable_attributes =
             Setting::Set(vec![FilterableAttributesRule::Field(S("category"))]);
         settings.sortable_attributes = Setting::Set(vec![S("price")].into_iter().collect()); // Use BTreeSet
-        // Use milli::update::RankingRule
+        // Use milli::Criterion for ranking rules
         settings.ranking_rules = Setting::Set(vec![
-            RankingRule::Typo,
-            RankingRule::Words,
-            RankingRule::Proximity,
+            Criterion::Typo,
+            Criterion::Words,
+            Criterion::Proximity,
         ]);
         settings.stop_words = Setting::Set(BTreeSet::from([S("the"), S("a")]));
         settings.synonyms = Setting::Set(BTreeMap::from([(S("cat"), vec![S("feline")])]));
         // Pass String directly to Setting::Set for distinct_attribute
         settings.distinct_attribute = Setting::Set(S("sku"));
-        // Typo Tolerance (Use imported types)
-        settings.typo_tolerance = Setting::Set(TypoToleranceSettings {
+        // Typo Tolerance (Use corrected imported types)
+        settings.typo_tolerance = Setting::Set(TypoSettings {
             enabled: Setting::Set(false),
             min_word_size_for_typos: Setting::Set(
-                MinWordSizeForTypos {
+                MinWordSizeTyposSetting { // Corrected type name
                     one_typo: Setting::Set(6),
                     two_typos: Setting::Set(10),
                 },
@@ -2029,17 +2029,18 @@ mod msfj_sis_scheduler_e2e_tests {
             target_index.localized_attributes_rules(&target_rtxn).unwrap(),
             "Localized attributes mismatch"
         );
-        // Tokenization (Convert FST sets to BTreeSet for comparison - call stream() on fst inside map)
-        let source_separator_tokens: Option<BTreeSet<String>> = source_index.separator_tokens(&source_rtxn).unwrap().map(|fst_set| fst_set.stream().into_strs().unwrap().into_iter().collect());
-        let target_separator_tokens: Option<BTreeSet<String>> = target_index.separator_tokens(&target_rtxn).unwrap().map(|fst_set| fst_set.stream().into_strs().unwrap().into_iter().collect());
+        // Tokenization (Compare Option<&BTreeSet<String>> directly)
+        // Clone the Option<&BTreeSet> to get Option<BTreeSet> for comparison
+        let source_separator_tokens: Option<BTreeSet<String>> = source_index.separator_tokens(&source_rtxn).unwrap().cloned();
+        let target_separator_tokens: Option<BTreeSet<String>> = target_index.separator_tokens(&target_rtxn).unwrap().cloned();
         assert_eq!(source_separator_tokens, target_separator_tokens, "Separator tokens mismatch");
 
-        let source_non_separator_tokens: Option<BTreeSet<String>> = source_index.non_separator_tokens(&source_rtxn).unwrap().map(|fst_set| fst_set.stream().into_strs().unwrap().into_iter().collect());
-        let target_non_separator_tokens: Option<BTreeSet<String>> = target_index.non_separator_tokens(&target_rtxn).unwrap().map(|fst_set| fst_set.stream().into_strs().unwrap().into_iter().collect());
+        let source_non_separator_tokens: Option<BTreeSet<String>> = source_index.non_separator_tokens(&source_rtxn).unwrap().cloned();
+        let target_non_separator_tokens: Option<BTreeSet<String>> = target_index.non_separator_tokens(&target_rtxn).unwrap().cloned();
         assert_eq!(source_non_separator_tokens, target_non_separator_tokens, "Non-separator tokens mismatch");
 
-        let source_dictionary: Option<BTreeSet<String>> = source_index.dictionary(&source_rtxn).unwrap().map(|fst_set| fst_set.stream().into_strs().unwrap().into_iter().collect());
-        let target_dictionary: Option<BTreeSet<String>> = target_index.dictionary(&target_rtxn).unwrap().map(|fst_set| fst_set.stream().into_strs().unwrap().into_iter().collect());
+        let source_dictionary: Option<BTreeSet<String>> = source_index.dictionary(&source_rtxn).unwrap().cloned();
+        let target_dictionary: Option<BTreeSet<String>> = target_index.dictionary(&target_rtxn).unwrap().cloned();
         assert_eq!(source_dictionary, target_dictionary, "Dictionary mismatch");
         // Search Cutoff
         assert_eq!(
