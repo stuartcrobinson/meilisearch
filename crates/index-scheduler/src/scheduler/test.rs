@@ -1458,12 +1458,16 @@ mod msfj_sis_scheduler_import_tests {
 
     #[actix_rt::test]
     async fn test_import_snapshot_with_all_settings() {
-        use meilisearch_types::settings::{
-            FacetingSettings, LocalizedAttributesRuleView, MinWordSizeForTypos, OrderByType,
-            PaginationSettings, PrefixSearchSettings, TypoToleranceSettings, FacetSearchSettings,
-        };
-        use milli::update::{LocalizedAttributesRule, PrefixSearch};
-        use milli::vector::settings::ProximityPrecision;
+        // Corrected and added imports
+        use meilisearch_types::locales::LocalizedAttributesRuleView; // Correct path
+        use meilisearch_types::settings::facet::{FacetSearchSettings, OrderByType}; // Correct path
+        use meilisearch_types::settings::PrefixSearchSettings;
+        // Removed unused: FacetingSettings, MinWordSizeForTypos, PaginationSettings, TypoToleranceSettings
+        use milli::index::PrefixSearch; // Correct path
+        use milli::proximity::ProximityPrecision; // Correct path
+        use milli::update::settings::LocalizedAttributesRule; // Correct path
+        use milli::order_by_map::OrderByMap; // Added import
+        use milli::OrderBy; // Added import
         use std::collections::{BTreeMap, BTreeSet, HashSet};
 
         let (index_scheduler, mut handle) = IndexScheduler::test(true, vec![]);
@@ -1492,8 +1496,8 @@ mod msfj_sis_scheduler_import_tests {
 
         settings.set_max_values_per_facet(50);
         let mut sort_facet_values_by = BTreeMap::new();
-        sort_facet_values_by.insert("size".to_string(), milli::update::OrderBy::Desc);
-        settings.set_sort_facet_values_by(OrderByMap::from(sort_facet_values_by));
+        sort_facet_values_by.insert("size".to_string(), OrderBy::Desc); // Use imported OrderBy
+        settings.set_sort_facet_values_by(OrderByMap::from(sort_facet_values_by)); // Use imported OrderByMap
 
         settings.set_pagination_max_total_hits(500);
 
@@ -1508,8 +1512,8 @@ mod msfj_sis_scheduler_import_tests {
         settings.set_non_separator_tokens(BTreeSet::from(["#".to_string()]));
         settings.set_dictionary(BTreeSet::from(["wordA".to_string(), "wordB".to_string()]));
         settings.set_search_cutoff(100);
-        settings.set_prefix_search(PrefixSearch { enabled: true, min_prefix_length: 3 });
-        settings.set_facet_search(meilisearch_types::settings::FacetSearchSettings { enabled: true, max_candidates: 10 });
+        settings.set_prefix_search(PrefixSearch { enabled: true, min_prefix_length: 3 }); // Use imported milli::index::PrefixSearch
+        settings.set_facet_search(FacetSearchSettings { enabled: true, max_candidates: 10 }); // Use imported FacetSearchSettings
 
         // Keep embedders simple as tested elsewhere
         let mut embedders = BTreeMap::default();
@@ -1578,17 +1582,20 @@ mod msfj_sis_scheduler_import_tests {
         }];
         assert_eq!(localized, expected_localized);
 
-        // Verify Tokenization Settings
-        assert_eq!(imported_index.separator_tokens(&index_rtxn).unwrap(), &BTreeSet::from(["&".to_string()]));
-        assert_eq!(imported_index.non_separator_tokens(&index_rtxn).unwrap(), &BTreeSet::from(["#".to_string()]));
-        assert_eq!(imported_index.dictionary(&index_rtxn).unwrap(), &BTreeSet::from(["wordA".to_string(), "wordB".to_string()]));
+        // Verify Tokenization Settings (Handle Option<&BTreeSet>)
+        let expected_separators = BTreeSet::from(["&".to_string()]);
+        assert_eq!(imported_index.separator_tokens(&index_rtxn).unwrap(), Some(expected_separators.iter().collect::<BTreeSet<_>>().deref())); // Compare Option<&BTreeSet>
+        let expected_non_separators = BTreeSet::from(["#".to_string()]);
+        assert_eq!(imported_index.non_separator_tokens(&index_rtxn).unwrap(), Some(expected_non_separators.iter().collect::<BTreeSet<_>>().deref())); // Compare Option<&BTreeSet>
+        let expected_dictionary = BTreeSet::from(["wordA".to_string(), "wordB".to_string()]);
+        assert_eq!(imported_index.dictionary(&index_rtxn).unwrap(), Some(expected_dictionary.iter().collect::<BTreeSet<_>>().deref())); // Compare Option<&BTreeSet>
 
         // Verify Search Cutoff
         assert_eq!(imported_index.search_cutoff(&index_rtxn).unwrap(), Some(100));
 
-        // Verify Prefix Search
+        // Verify Prefix Search (Compare milli::index::PrefixSearch)
         let prefix_search = imported_index.prefix_search(&index_rtxn).unwrap();
-        let expected_prefix_search = PrefixSearchSettings { enabled: true, min_prefix_length: 3 };
+        let expected_prefix_search = PrefixSearch { enabled: true, min_prefix_length: 3 }; // Use milli::index::PrefixSearch
         assert_eq!(prefix_search, expected_prefix_search);
 
         // Verify Facet Search
