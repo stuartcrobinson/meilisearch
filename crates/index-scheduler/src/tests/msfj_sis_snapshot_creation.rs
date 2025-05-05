@@ -90,7 +90,8 @@ mod msfj_sis_snapshot_creation_tests {
 
         // === Restore snapshot verification ===
         // Verify the snapshot file exists and has the correct name format
-        let expected_filename = format!("{}-{}.snapshot.tar.gz", index_uid, snapshot_uid);
+        // Use snapshot_uid.display() for formatting
+        let expected_filename = format!("{}-{}.snapshot.tar.gz", index_uid, snapshot_uid.display());
         // let snapshot_filepath = snapshots_path.join(&expected_filename);
         let snapshot_filepath = snapshots_path.join(&expected_filename);
         assert!(snapshot_filepath.exists(), "Snapshot file was not created at {:?}", snapshot_filepath);
@@ -189,12 +190,11 @@ mod msfj_sis_snapshot_creation_tests {
         };
 
         // Call the function under test, passing the index handle
-        let snapshot_uid = create_index_snapshot(index_uid, &index, metadata.clone(), snapshots_path).unwrap();
+        let snapshot_path = create_index_snapshot(index_uid, &index, metadata.clone(), snapshots_path).unwrap();
 
         // Verify the snapshot file exists
-        let expected_filename = format!("{}-{}.snapshot.tar.gz", index_uid, snapshot_uid);
-        let snapshot_filepath = snapshots_path.join(&expected_filename);
-        assert!(snapshot_filepath.exists());
+        // Use snapshot_path directly
+        assert!(snapshot_path.exists());
 
         // Unpack and verify basic structure
         let snapshot_file = File::open(&snapshot_filepath).unwrap();
@@ -368,12 +368,11 @@ mod msfj_sis_snapshot_creation_tests {
         let index_for_snapshot = handle.index(index_uid).unwrap();
 
         // Create the snapshot
-        let snapshot_uid = create_index_snapshot(index_uid, &index_for_snapshot, expected_metadata.clone(), snapshots_path).unwrap();
+        let snapshot_path = create_index_snapshot(index_uid, &index_for_snapshot, expected_metadata.clone(), snapshots_path).unwrap();
 
         // --- Verification ---
-        let expected_filename = format!("{}-{}.snapshot.tar.gz", index_uid, snapshot_uid);
-        let snapshot_filepath = snapshots_path.join(&expected_filename);
-        assert!(snapshot_filepath.exists(), "Snapshot file was not created");
+        // Use snapshot_path directly
+        assert!(snapshot_path.exists(), "Snapshot file was not created");
 
         // Unpack
         let snapshot_file = File::open(&snapshot_filepath).unwrap();
