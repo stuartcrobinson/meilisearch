@@ -213,6 +213,9 @@ crates/index-scheduler/src/error.rs
         *   **Finalize Task**: Based on the `Result` from *both* the core logic and the settings application: update the task status to `Succeeded` only if both succeeded. If either fails, update the status to `Failed` and store the relevant error in `Details`.
 *   **Testing (TDD)**: Write integration tests: Place a valid snapshot file in `snapshots_path`. Enqueue an `SingleIndexSnapshotImport` task. Run `tick()`. Verify the scheduler correctly calls the core `IndexMapper::import_index_from_snapshot` function, handles its `Result`, attempts settings application on success, and updates the task's final status based on the outcome of both steps. Check that the new index exists (via `IndexMapper` or API) and has the correct settings applied (check settings API or direct `milli::Index` methods). Test error handling during the settings application phase (ensure task fails correctly).
 *   **Step Completion Check**: Add the `cargo test` command here to run only the tests implemented for this step.
+```
+cargo test -p index-scheduler -- scheduler::test::msfj_sis_scheduler_import_tests
+```
 
 ### 7. Add Progress Reporting (Optional Backend Part)
 
