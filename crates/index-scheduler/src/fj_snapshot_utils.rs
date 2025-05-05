@@ -49,7 +49,6 @@ pub fn create_index_snapshot(
     let snapshot_filepath = snapshots_path.join(&snapshot_filename);
 
     // Ensure the target directory exists *before* any file operations within it
-    tracing::info!(target: "snapshot_creation", "Ensuring target snapshot directory exists: {:?}", snapshots_path);
     fs::create_dir_all(snapshots_path).map_err(|e| Error::IoError(e))?;
 
     // Define temporary paths *within* the final snapshot directory
@@ -65,7 +64,6 @@ pub fn create_index_snapshot(
     };
 
     // Write metadata directly to the temporary path in the snapshot directory
-    tracing::info!(target: "snapshot_creation", "Writing metadata to temp file: {:?}", temp_metadata_path);
     match File::create(&temp_metadata_path) {
         Ok(metadata_file) => {
             if let Err(e) = serde_json::to_writer(metadata_file, &metadata) {
@@ -81,10 +79,8 @@ pub fn create_index_snapshot(
             return Err(Error::IoError(e));
         }
     }
-    tracing::info!(target: "snapshot_creation", "Successfully wrote temp metadata");
 
     // Copy data.mdb directly to the temporary path in the snapshot directory
-    tracing::info!(target: "snapshot_creation", "Copying data.mdb to temp file: {:?}", temp_data_path);
     if let Err(e) = index.copy_to_path(&temp_data_path, heed::CompactionOption::Enabled) {
         cleanup(&temp_metadata_path, &temp_data_path);
         return Err(Error::SnapshotCreationFailed {
@@ -92,10 +88,8 @@ pub fn create_index_snapshot(
             source: Box::new(e),
         });
     }
-    tracing::info!(target: "snapshot_creation", "Successfully copied temp data.mdb");
 
     // Create the final gzipped tarball directly
-    tracing::info!(target: "snapshot_creation", "Creating final tarball at: {:?}", snapshot_filepath);
     match File::create(&snapshot_filepath) {
         Ok(snapshot_file) => {
             let gz_encoder = GzEncoder::new(snapshot_file, Compression::default());
@@ -137,7 +131,6 @@ pub fn create_index_snapshot(
                     return Err(Error::IoError(e));
                 }
             };
-            tracing::info!(target: "snapshot_creation", "Finished Gzip encoder");
 
             // === Restore Sync Calls ===
             // Explicitly sync data to disk
@@ -159,20 +152,16 @@ pub fn create_index_snapshot(
 
     // Cleanup temporary files *after* successful tarball creation and sync
     cleanup(&temp_metadata_path, &temp_data_path);
-    tracing::info!(target: "snapshot_creation", "Cleaned up temporary files");
 
 
     // === Restore Sync Calls ===
     // Attempt to sync the parent directory as well (remains the same)
     if let Some(parent_dir) = snapshot_filepath.parent() {
-        tracing::info!(target: "snapshot_creation", "Attempting to sync parent directory: {:?}", parent_dir);
         match File::open(parent_dir) {
             Ok(dir_handle) => {
                 if let Err(e) = dir_handle.sync_all() {
                     tracing::warn!(target: "snapshot_creation", "Failed to sync parent directory {:?}: {}", parent_dir, e);
                     // Continue anyway, maybe it wasn't necessary
-                } else {
-                    tracing::info!(target: "snapshot_creation", "Successfully synced parent directory");
                 }
                 drop(dir_handle); // Close directory handle
             }
@@ -191,8 +180,6 @@ pub fn create_index_snapshot(
             if let Err(e) = file_handle.sync_data() {
                 tracing::warn!(target: "snapshot_creation", "Failed to sync_data for snapshot file {:?}: {}", snapshot_filepath, e);
                 // Continue anyway
-            } else {
-                tracing::info!(target: "snapshot_creation", "Successfully sync_data for snapshot file");
             }
             drop(file_handle); // Close the handle
         }
@@ -206,23 +193,7 @@ pub fn create_index_snapshot(
 
     // Verification moved to the caller (`create_test_snapshot`)
 
-    // Add internal verification checks just before returning Ok
-    tracing::info!(target: "snapshot_creation", "[Internal Check] Verifying snapshot file state before returning: {:?}", snapshot_filepath);
-    let internal_exists = snapshot_filepath.exists();
-    let internal_is_file = snapshot_filepath.is_file();
-    let internal_metadata_result = std::fs::metadata(&snapshot_filepath);
-    tracing::info!(target: "snapshot_creation", "[Internal Check] Pre-return state: exists={}, is_file={}, metadata={:?}", internal_exists, internal_is_file, internal_metadata_result);
-
-
-    // Log final path before returning
-    tracing::info!(target: "snapshot_creation", "Successfully created snapshot: {:?}", snapshot_filepath);
-    tracing::info!(target: "snapshot_creation", "Exiting create_index_snapshot successfully for: {:?}", snapshot_filepath);
-
-    // === Internal Verification Step ===
-    assert!(snapshot_filepath.is_file(), "[INTERNAL CHECK FAILED] Snapshot file {:?} does not exist or is not a file just before returning Ok from create_index_snapshot.", snapshot_filepath);
-    tracing::info!(target: "snapshot_creation", "[Internal Check Passed] Snapshot file {:?} exists before returning Ok.", snapshot_filepath);
-    // === End Internal Verification Step ===
-
+    // Internal assertion removed, rely on test assertions.
 
     Ok(snapshot_filepath) // Return the full path
 }

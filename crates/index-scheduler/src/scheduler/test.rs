@@ -1846,27 +1846,10 @@ mod msfj_sis_scheduler_e2e_tests {
             // Use the stable_snapshot_path configured earlier
             snapshot_path = stable_snapshot_path.join(filename); // Assign to outer scope variable
 
-            // === Test Logging Step ===
-            tracing::info!(target: "snapshot_e2e_test", "Retrieved full snapshot_uid from task: {}", full_snapshot_uid);
-            tracing::info!(target: "snapshot_e2e_test", "Constructed expected snapshot path for assertion: {:?}", snapshot_path);
-            // === End Test Logging Step ===
-
-            // === Directory Check ===
-            let parent_dir = snapshot_path.parent().expect("Snapshot path should have a parent directory");
-            tracing::info!(target: "snapshot_e2e_test", "Checking parent directory existence before assertion loop: {:?} -> Exists: {}", parent_dir, parent_dir.exists());
-            // === End Directory Check ===
-
-            // === Pre-Loop Check ===
-            let pre_loop_exists = snapshot_path.is_file();
-            tracing::info!(target: "snapshot_e2e_test", "Checking file existence immediately before assertion loop: {:?} -> Exists: {}", snapshot_path, pre_loop_exists);
-            // === End Pre-Loop Check ===
-
             // === Simplified Assertion (No Delay) ===
             // Assert directly after the pre-loop check using the stable path.
             assert!(snapshot_path.is_file(), "[Simplified Assertion Failed] Snapshot file {:?} not found immediately after pre-loop check (using stable path).", snapshot_path);
-            tracing::info!(target: "snapshot_e2e_test", "[Simplified Assertion Passed] Snapshot file {:?} found (using stable path).", snapshot_path);
             // === End Simplified Assertion ===
-
 
             // Verify creation progress trace
             let batch_id = creation_task.batch_uid.expect("Creation task should have a batch UID");
@@ -1895,9 +1878,7 @@ mod msfj_sis_scheduler_e2e_tests {
         // === Intermediate Check ===
         // Verify the snapshot file *still* exists immediately after the creation task finished processing
         assert!(snapshot_path.is_file(), "[Intermediate Check Failed] Snapshot file {:?} disappeared immediately after creation task finished.", snapshot_path);
-        tracing::info!(target: "snapshot_e2e_test", "[Intermediate Check Passed] Snapshot file {:?} still exists after creation task finished.", snapshot_path);
         // === End Intermediate Check ===
-
 
         // === 4. Import Snapshot ===
         let import_task_payload = KindWithContent::SingleIndexSnapshotImport {
