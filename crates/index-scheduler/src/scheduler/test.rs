@@ -1696,8 +1696,8 @@ mod msfj_sis_scheduler_e2e_tests {
         // Add documents
         let (file, documents_count) = sample_documents(&index_scheduler, 0, 10); // 10 documents
         file.persist().unwrap();
-        // Pass source_index_uid directly (it's already &'static str)
-        let task = replace_document_import_task(source_index_uid, Some("id"), 0, documents_count);
+        // Pass reference to source_index_uid as suggested by compiler error E0308
+        let task = replace_document_import_task(&source_index_uid, Some("id"), 0, documents_count);
         let _task_id = index_scheduler.register(task, None, false).unwrap().uid;
         handle.advance_one_successful_batch();
 
