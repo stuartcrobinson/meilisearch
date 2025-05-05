@@ -1626,14 +1626,14 @@ mod msfj_sis_scheduler_import_tests {
 
         // Verify Tokenization Settings (Handle Option<&BTreeSet>)
         let expected_separators = BTreeSet::from(["&".to_string()]);
-        // Compare Option<&BTreeSet> directly
-        assert_eq!(imported_index.separator_tokens(&index_rtxn).unwrap(), Some(&expected_separators));
+        // Compare Option<BTreeSet> by cloning the Option<&BTreeSet>
+        assert_eq!(imported_index.separator_tokens(&index_rtxn).unwrap(), Some(&expected_separators).cloned());
 
         let expected_non_separators = BTreeSet::from(["#".to_string()]);
-        assert_eq!(imported_index.non_separator_tokens(&index_rtxn).unwrap(), Some(&expected_non_separators));
+        assert_eq!(imported_index.non_separator_tokens(&index_rtxn).unwrap(), Some(&expected_non_separators).cloned());
 
         let expected_dictionary = BTreeSet::from(["wordA".to_string(), "wordB".to_string()]);
-        assert_eq!(imported_index.dictionary(&index_rtxn).unwrap(), Some(&expected_dictionary));
+        assert_eq!(imported_index.dictionary(&index_rtxn).unwrap(), Some(&expected_dictionary).cloned());
 
 
         // Verify Search Cutoff
