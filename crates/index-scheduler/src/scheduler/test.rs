@@ -1026,7 +1026,7 @@ mod msfj_sis_scheduler_import_tests {
         });
 
         // Add assertion here to check immediately after successful creation call
-        assert!(snapshot_path.is_file(), "Snapshot file missing immediately after creation call: {:?}", snapshot_path);
+        assert!(snapshot_path.is_file(), "[create_test_snapshot] Snapshot file missing immediately after creation call: {:?}", snapshot_path);
 
         snapshot_path
     }
@@ -1267,7 +1267,10 @@ mod msfj_sis_scheduler_import_tests {
             create_test_snapshot(&index_scheduler, &mut handle, source_index, &snapshot_filename); // Pass handle
 
         // Check snapshot exists *after* creation
-        assert!(snapshot_path.is_file(), "Snapshot file missing after creation: {:?}", snapshot_path);
+        // Add a small delay for potential filesystem sync issues (though sync_all should handle this)
+        std::thread::sleep(std::time::Duration::from_millis(100));
+
+        assert!(snapshot_path.is_file(), "[test_import_snapshot_version_mismatch] Snapshot file missing after creation: {:?}", snapshot_path);
 
         // Modify the metadata.json within the snapshot to have a different version
         let temp_extract_dir = tempdir().unwrap();
