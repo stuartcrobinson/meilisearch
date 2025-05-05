@@ -1823,6 +1823,10 @@ mod msfj_sis_scheduler_e2e_tests {
             tracing::info!(target: "snapshot_e2e_test", "Checking parent directory existence before assertion loop: {:?} -> Exists: {}", parent_dir, parent_dir.exists());
             // === End Directory Check ===
 
+            // === Pre-Loop Check ===
+            let pre_loop_exists = snapshot_path.is_file();
+            tracing::info!(target: "snapshot_e2e_test", "Checking file existence immediately before assertion loop: {:?} -> Exists: {}", snapshot_path, pre_loop_exists);
+            // === End Pre-Loop Check ===
 
             // Retry assertion with delay for filesystem sync
             let mut found = false;
