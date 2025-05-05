@@ -1796,11 +1796,11 @@ mod msfj_sis_scheduler_e2e_tests {
         settings.search_cutoff_ms = Setting::Set(100);
         // Prefix Search (Convert to Settings type)
         settings.prefix_search = Setting::Set(PrefixSearch::IndexingTime.into());
-        // Facet Search (Assuming it exists and needs setting)
-        // settings.facet_search = Setting::Set(meilisearch_types::settings::FacetSearchSettings {
-        //     enabled: Setting::Set(true),
-        //     max_candidates: Setting::Set(10),
-        // });
+        // Facet Search
+        settings.facet_search = Setting::Set(meilisearch_types::settings::FacetSearchSettings {
+            enabled: Setting::Set(true),
+            max_candidates: Setting::Set(10),
+        });
 
         // Update settings using literal
         let task = KindWithContent::SettingsUpdate {
@@ -1962,135 +1962,63 @@ mod msfj_sis_scheduler_e2e_tests {
             "Document count mismatch"
         );
 
-        // Verify all settings (add more assertions as needed)
-        assert_eq!(
-            source_index.displayed_fields(&source_rtxn).unwrap(), // Use displayed_fields
-            target_index.displayed_fields(&target_rtxn).unwrap(), // Use displayed_fields
-            "Displayed attributes mismatch"
-        );
+        // Verify all settings by retrieving the full settings object for both indexes
+        let source_settings = meilisearch_types::settings::settings(
+            &source_index,
+            &source_rtxn,
+            meilisearch_types::settings::SecretPolicy::RevealSecrets,
+        )
+        .expect("Failed to retrieve source index settings");
+
+        let target_settings = meilisearch_types::settings::settings(
+            &target_index,
+            &target_rtxn,
+            meilisearch_types::settings::SecretPolicy::RevealSecrets,
+        )
+        .expect("Failed to retrieve target index settings");
+
+        // Compare the full settings structs (excluding timestamps which will differ)
+        assert_eq!(source_settings.displayed_attributes, target_settings.displayed_attributes, "Displayed attributes mismatch");
+        assert_eq!(source_settings.searchable_attributes, target_settings.searchable_attributes, "Searchable attributes mismatch");
+        assert_eq!(source_settings.filterable_attributes, target_settings.filterable_attributes, "Filterable attributes mismatch");
+        assert_eq!(source_settings.sortable_attributes, target_settings.sortable_attributes, "Sortable attributes mismatch");
+        assert_eq!(source_settings.ranking_rules, target_settings.ranking_rules, "Ranking rules mismatch");
+        assert_eq!(source_settings.stop_words, target_settings.stop_words, "Stop words mismatch");
+        assert_eq!(source_settings.synonyms, target_settings.synonyms, "Synonyms mismatch");
+        assert_eq!(source_settings.distinct_attribute, target_settings.distinct_attribute, "Distinct attribute mismatch");
+        assert_eq!(source_settings.typo_tolerance, target_settings.typo_tolerance, "Typo tolerance mismatch");
+        assert_eq!(source_settings.faceting, target_settings.faceting, "Faceting settings mismatch");
+        assert_eq!(source_settings.pagination, target_settings.pagination, "Pagination settings mismatch");
+        assert_eq!(source_settings.proximity_precision, target_settings.proximity_precision, "Proximity precision mismatch");
+        // Embedders comparison removed as they are not set in this test
+        // assert_eq!(source_settings.embedders, target_settings.embedders, "Embedders mismatch");
+        assert_eq!(source_settings.localized_attributes, target_settings.localized_attributes, "Localized attributes mismatch");
+        assert_eq!(source_settings.separator_tokens, target_settings.separator_tokens, "Separator tokens mismatch");
+        assert_eq!(source_settings.non_separator_tokens, target_settings.non_separator_tokens, "Non-separator tokens mismatch");
+        assert_eq!(source_settings.dictionary, target_settings.dictionary, "Dictionary mismatch");
+        assert_eq!(source_settings.search_cutoff_ms, target_settings.search_cutoff_ms, "Search cutoff mismatch");
+        assert_eq!(source_settings.prefix_search, target_settings.prefix_search, "Prefix search mismatch");
+        assert_eq!(source_settings.facet_search, target_settings.facet_search, "Facet search mismatch"); // Verify facet_search
+
+        // Individual assertions below this point are now redundant and can be removed.
+        /*
         assert_eq!(
             source_index.searchable_fields(&source_rtxn).unwrap(), // Use searchable_fields
-            target_index.searchable_fields(&target_rtxn).unwrap(), // Use searchable_fields
-            "Searchable attributes mismatch"
-        );
-        assert_eq!(
             source_index.filterable_attributes_rules(&source_rtxn).unwrap(),
-            target_index.filterable_attributes_rules(&target_rtxn).unwrap(),
-            "Filterable attributes mismatch"
-        );
-        assert_eq!(
             source_index.sortable_fields(&source_rtxn).unwrap(), // Use sortable_fields
-            target_index.sortable_fields(&target_rtxn).unwrap(), // Use sortable_fields
-            "Sortable attributes mismatch"
-        );
-        assert_eq!(
             source_index.criteria(&source_rtxn).unwrap(), // Use criteria
-            target_index.criteria(&target_rtxn).unwrap(), // Use criteria
-            "Ranking rules mismatch"
-        );
-        // Convert stop words FST set to BTreeSet for comparison
-        let source_stop_words: Option<BTreeSet<String>> = source_index.stop_words(&source_rtxn).unwrap().map(|fst| fst.stream().into_strs().unwrap().into_iter().collect());
-        let target_stop_words: Option<BTreeSet<String>> = target_index.stop_words(&target_rtxn).unwrap().map(|fst| fst.stream().into_strs().unwrap().into_iter().collect());
-        assert_eq!(source_stop_words, target_stop_words, "Stop words mismatch");
-
-        // Directly compare the HashMaps returned by index.synonyms()
-        assert_eq!(
             source_index.synonyms(&source_rtxn).unwrap(),
-            target_index.synonyms(&target_rtxn).unwrap(),
-            "Synonyms mismatch"
-        );
-
-        assert_eq!(
             source_index.distinct_field(&source_rtxn).unwrap(), // Use distinct_field
-            target_index.distinct_field(&target_rtxn).unwrap(), // Use distinct_field
-            "Distinct attribute mismatch"
-        );
-        // Typo Tolerance
-        assert_eq!(
             source_index.authorize_typos(&source_rtxn).unwrap(),
-            target_index.authorize_typos(&target_rtxn).unwrap(),
-            "Typo tolerance enabled mismatch"
-        );
-        assert_eq!(
             source_index.min_word_len_one_typo(&source_rtxn).unwrap(),
-            target_index.min_word_len_one_typo(&target_rtxn).unwrap(),
-            "Min word len one typo mismatch"
-        );
-        assert_eq!(
             source_index.min_word_len_two_typos(&source_rtxn).unwrap(),
-            target_index.min_word_len_two_typos(&target_rtxn).unwrap(),
-            "Min word len two typos mismatch"
-        );
-        // Convert exact words FST set to BTreeSet for comparison
-        let source_exact_words: Option<BTreeSet<String>> = source_index.exact_words(&source_rtxn).unwrap().map(|fst| fst.stream().into_strs().unwrap().into_iter().collect());
-        let target_exact_words: Option<BTreeSet<String>> = target_index.exact_words(&target_rtxn).unwrap().map(|fst| fst.stream().into_strs().unwrap().into_iter().collect());
-        assert_eq!(source_exact_words, target_exact_words, "Exact words mismatch");
-
-        assert_eq!(
             source_index.exact_attributes(&source_rtxn).unwrap().into_iter().map(String::from).collect::<HashSet<String>>(), // Explicitly collect HashSet<String>
-            target_index.exact_attributes(&target_rtxn).unwrap().into_iter().map(String::from).collect::<HashSet<String>>(), // Explicitly collect HashSet<String>
-            "Exact attributes mismatch"
-        );
-        // Faceting
-        assert_eq!(
             source_index.max_values_per_facet(&source_rtxn).unwrap(),
-            target_index.max_values_per_facet(&target_rtxn).unwrap(),
-            "Max values per facet mismatch"
-        );
-        // Convert OrderByMap to BTreeMap<String, FacetValuesSort> for comparison
-        let source_sort_by: BTreeMap<String, FacetValuesSort> = source_index.sort_facet_values_by(&source_rtxn).unwrap().into_iter().map(|(k, v)| (k, v.into())).collect();
-        let target_sort_by: BTreeMap<String, FacetValuesSort> = target_index.sort_facet_values_by(&target_rtxn).unwrap().into_iter().map(|(k, v)| (k, v.into())).collect();
-        assert_eq!(source_sort_by, target_sort_by, "Sort facet values by mismatch");
-        // Pagination
-        assert_eq!(
             source_index.pagination_max_total_hits(&source_rtxn).unwrap(),
-            target_index.pagination_max_total_hits(&target_rtxn).unwrap(),
-            "Pagination max total hits mismatch"
-        );
-        // Proximity Precision
-        assert_eq!(
             source_index.proximity_precision(&source_rtxn).unwrap(),
-            target_index.proximity_precision(&target_rtxn).unwrap(),
-            "Proximity precision mismatch"
-        );
-        // Embedders verification removed as setting was removed from test setup
-        // assert_eq!(source_index.embedding_configs(...), target_index.embedding_configs(...));
-       // Localized Attributes
-        assert_eq!(
             source_index.localized_attributes_rules(&source_rtxn).unwrap(),
-            target_index.localized_attributes_rules(&target_rtxn).unwrap(),
-            "Localized attributes mismatch"
-        );
-        // Tokenization (Compare Option<&BTreeSet<String>> directly)
-        // Use .map(|set_ref| set_ref.clone()) to get Option<BTreeSet<String>>
-        let source_separator_tokens: Option<BTreeSet<String>> = source_index.separator_tokens(&source_rtxn).unwrap().map(|s| s.clone());
-        let target_separator_tokens: Option<BTreeSet<String>> = target_index.separator_tokens(&target_rtxn).unwrap().map(|s| s.clone());
-        assert_eq!(source_separator_tokens, target_separator_tokens, "Separator tokens mismatch");
-
-        let source_non_separator_tokens: Option<BTreeSet<String>> = source_index.non_separator_tokens(&source_rtxn).unwrap().map(|s| s.clone());
-        let target_non_separator_tokens: Option<BTreeSet<String>> = target_index.non_separator_tokens(&target_rtxn).unwrap().map(|s| s.clone());
-        assert_eq!(source_non_separator_tokens, target_non_separator_tokens, "Non-separator tokens mismatch");
-
-        let source_dictionary: Option<BTreeSet<String>> = source_index.dictionary(&source_rtxn).unwrap().map(|s| s.clone());
-        let target_dictionary: Option<BTreeSet<String>> = target_index.dictionary(&target_rtxn).unwrap().map(|s| s.clone());
-        assert_eq!(source_dictionary, target_dictionary, "Dictionary mismatch");
-        // Search Cutoff
-        assert_eq!(
             source_index.search_cutoff(&source_rtxn).unwrap(),
-            target_index.search_cutoff(&target_rtxn).unwrap(),
-            "Search cutoff mismatch"
-        );
-        // Prefix Search
-        assert_eq!(
             source_index.prefix_search(&source_rtxn).unwrap(),
-            target_index.prefix_search(&target_rtxn).unwrap(),
-            "Prefix search mismatch"
-        );
-        // Facet Search (if applicable)
-        // assert_eq!(
-        //     source_index.facet_search(&source_rtxn).unwrap(),
-        //     target_index.facet_search(&target_rtxn).unwrap(),
-        //     "Facet search mismatch"
-        // );
+        */
     }
 }

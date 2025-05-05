@@ -922,8 +922,8 @@ impl IndexScheduler {
             if let Setting::Set(val) = settings.search_cutoff_ms { settings_builder.set_search_cutoff(val); } // Pass u64 directly
             // Prefix Search (Assuming it exists in Settings<Unchecked>)
             if let Setting::Set(val) = settings.prefix_search { settings_builder.set_prefix_search(val.into()); } // Add .into()
-            // Facet Search is not included in single-index snapshots currently.
-            // if let Setting::Set(val) = settings.facet_search { settings_builder.set_facet_search(val); }
+            // Apply Facet Search settings if present
+            if let Setting::Set(val) = settings.facet_search { settings_builder.set_facet_search(val); }
 
             let must_stop_processing = self.scheduler.must_stop_processing.clone();
             settings_builder
