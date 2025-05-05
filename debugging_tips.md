@@ -1,5 +1,7 @@
 # Debugging Tips Log (Learnings from index-scheduler tests)
 
+**Mission**: This document logs specific error patterns (compiler errors, test failures) encountered *while debugging the `meilisearchfj` codebase*, particularly the Single Index Snapshot feature, and the concrete solutions that resolved them in this context. Avoid general debugging advice; focus on recording the exact error signature, the specific situation it occurred in, and the precise fix applied.
+
 ## Rust Compiler Errors
 
 *   **E0308: Mismatched Types**
