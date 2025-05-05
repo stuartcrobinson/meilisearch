@@ -1618,7 +1618,7 @@ mod msfj_sis_scheduler_import_tests {
             // Use .into() for AttributePatterns as suggested by compiler
             attribute_patterns: vec!["title#fr".to_string()].into(),
             // Corrected Language construction (use Language::from_code) and convert to Locale
-            locales: vec![Language::from_code("title").unwrap().into()], // Use .into() here
+            locales: vec![Language::from_code("fr").unwrap().into()], // Use correct code "fr" and .into()
         }]);
         // Corrected assertion for localized attributes
         let expected_localized_milli: Vec<LocalizedAttributesRule> = expected_localized_view.into_iter().map(|v| v.into()).collect();
