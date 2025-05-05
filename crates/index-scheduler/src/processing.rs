@@ -179,6 +179,25 @@ make_atomic_progress!(Document alias AtomicDocumentStep => "document" );
 make_atomic_progress!(Batch alias AtomicBatchStep => "batch" );
 make_atomic_progress!(UpdateFile alias AtomicUpdateFileStep => "update file" );
 
+// [meilisearchfj] Progress steps for Single Index Snapshot Creation
+make_enum_progress! {
+    pub enum FjSingleIndexSnapshotCreationProgress {
+        ReadingMetadata,
+        CopyingIndexData,
+        PackagingSnapshot,
+    }
+}
+
+// [meilisearchfj] Progress steps for Single Index Snapshot Import
+make_enum_progress! {
+    pub enum FjSingleIndexSnapshotImportProgress {
+        ValidatingSnapshot,
+        UnpackingSnapshot,
+        ApplyingSettings,
+    }
+}
+
+
 #[cfg(test)]
 mod test {
     use std::sync::atomic::Ordering;

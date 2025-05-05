@@ -23,6 +23,7 @@ use milli::vector::settings as milli_vec_settings; // [meilisearchfj] Alias for 
 // use crate::processing::ProcessingTasks; // Still unused
 use crate::processing::{
     AtomicBatchStep, AtomicTaskStep, CreateIndexProgress, DeleteIndexProgress, FinalizingIndexStep,
+    FjSingleIndexSnapshotCreationProgress, FjSingleIndexSnapshotImportProgress, // [meilisearchfj] Import new progress enums
     InnerSwappingTwoIndexes, SwappingTheIndexes, TaskCancelationProgress, TaskDeletionProgress,
     UpdateIndexProgress,
 };
@@ -712,10 +713,10 @@ impl IndexScheduler {
     }
 
     /// Processes a `SingleIndexSnapshotCreation` task.
-    #[tracing::instrument(level = "trace", skip(self, _progress, task), target = "indexing::scheduler")] // Prefix progress with _
+    #[tracing::instrument(level = "trace", skip(self, progress, task), target = "indexing::scheduler")] // Remove _ prefix from progress
     fn process_single_index_snapshot_creation(
         &self,
-        _progress: Progress, // Prefix progress with _
+        progress: Progress, // Remove _ prefix from progress
         mut task: Task,
     ) -> Result<Task> {
         let index_uid = match &task.kind {
@@ -723,8 +724,8 @@ impl IndexScheduler {
             _ => unreachable!("Invalid task kind passed to process_single_index_snapshot_creation"),
         };
 
-        // TODO: Add specific progress steps for snapshot creation if needed (Step 7)
-        // progress.update_progress(SingleIndexSnapshotCreationProgress::Starting);
+        // [meilisearchfj] Report progress
+        progress.update_progress(FjSingleIndexSnapshotCreationProgress::ReadingMetadata);
 
         // Expect PathBuf from the closure now
         let snapshot_result: Result<PathBuf, Error> = (|| -> Result<PathBuf> { // Explicitly define closure return type
@@ -746,6 +747,9 @@ impl IndexScheduler {
             self.index_mapper
                 .set_currently_updating_index(Some((index_uid.clone(), index.clone())));
 
+            // [meilisearchfj] Report progress before calling core logic
+            progress.update_progress(FjSingleIndexSnapshotCreationProgress::CopyingIndexData);
+
             // Call the core snapshot creation logic with correct arguments
             // This is now the final expression of the closure
             fj_snapshot_utils::create_index_snapshot(
@@ -753,7 +757,8 @@ impl IndexScheduler {
                 &index,
                 metadata, // Pass the read metadata
                 &self.scheduler.snapshots_path,
-                // Remove progress argument
+                // Pass progress to core logic (assuming it will be used there eventually, or remove if not)
+                // For now, we report PackagingSnapshot *after* it returns successfully.
             )
             .map_err(|e| Error::SnapshotCreationFailed {
                 index_uid: index_uid.clone(),
@@ -766,6 +771,9 @@ impl IndexScheduler {
 
         match snapshot_result {
             Ok(snapshot_path) => {
+                // [meilisearchfj] Report progress after successful packaging
+                progress.update_progress(FjSingleIndexSnapshotCreationProgress::PackagingSnapshot);
+
                 // Extract the UID from the filename for the details
                 let snapshot_uid = snapshot_path
                     .file_stem()
@@ -807,11 +815,11 @@ impl IndexScheduler {
         Ok(task)
     }
 
-    #[tracing::instrument(level = "trace", skip(self, _progress, task), target = "indexing::scheduler")]
+    #[tracing::instrument(level = "trace", skip(self, progress, task), target = "indexing::scheduler")] // Remove _ prefix
     // [meilisearchfj] Renamed function according to naming conventions
     fn fj_process_single_index_snapshot_import(
         &self,
-        _progress: Progress,
+        progress: Progress, // Remove _ prefix
         mut task: Task,
         source_snapshot_path: String,
         target_index_uid: String,
@@ -820,12 +828,20 @@ impl IndexScheduler {
         let import_and_settings_result: Result<()> = (|| { // Keep the closure for scoping
             let snapshot_path = PathBuf::from(&source_snapshot_path);
 
+            // [meilisearchfj] Report progress: Validating snapshot (before import call)
+            progress.update_progress(FjSingleIndexSnapshotImportProgress::ValidatingSnapshot);
+
             // 1. Call IndexMapper to import the index data
             // Preserve the original error type from IndexMapper
             let (imported_index, parsed_metadata) = self
                 .index_mapper
                 .fj_import_index_from_snapshot(&target_index_uid, &snapshot_path)?;
                 // Removed the map_err that wrapped all errors as SnapshotImportFailed
+
+            // [meilisearchfj] Report progress: Unpacking done (implicitly by successful import)
+            // We report ApplyingSettings just before starting the settings application.
+            progress.update_progress(FjSingleIndexSnapshotImportProgress::UnpackingSnapshot);
+            progress.update_progress(FjSingleIndexSnapshotImportProgress::ApplyingSettings);
 
             // 2. Apply settings from the snapshot metadata
             let mut index_wtxn = imported_index.write_txn().map_err(|e| {
