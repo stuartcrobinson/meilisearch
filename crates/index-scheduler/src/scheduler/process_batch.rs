@@ -918,9 +918,16 @@ impl IndexScheduler {
             }
             Err(e) => { // Import or settings failed
                 task.status = Status::Failed;
-                // Convert the error to ResponseError for storage *without* consuming e
-                let response_error: meilisearch_types::error::ResponseError = e.clone().into(); // Clone e before converting for storage
-                task.error = Some(response_error);
+                // Manually construct ResponseError from `e` without consuming it.
+                // Error implements ErrorCode, which provides the necessary fields.
+                let code = e.error_code();
+                let response_error = meilisearch_types::error::ResponseError {
+                    message: e.to_string(),
+                    code,
+                    type_: code.error_type(),
+                    link: e.error_url(),
+                };
+                task.error = Some(response_error); // Store the constructed ResponseError
                 task.details = task.kind.default_details().map(|d| d.to_failed());
                 // Propagate the original error `e` up to the caller (process_batch)
                 // Note: This might require process_batch to handle this specific error structure if needed,
