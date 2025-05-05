@@ -181,10 +181,10 @@ impl IndexScheduler {
 
 /// Return a `KindWithContent::IndexCreation` task
 pub(crate) fn index_creation_task(
-    index: &'static str,
-    primary_key: Option<&'static str>,
+    index: impl Into<String>, // Change to accept anything convertible to String
+    primary_key: Option<&'static str>, // Keep primary_key as 'static for simplicity if needed
 ) -> KindWithContent {
-    KindWithContent::IndexCreation { index_uid: S(index), primary_key: primary_key.map(S) }
+    KindWithContent::IndexCreation { index_uid: index.into(), primary_key: primary_key.map(S) } // Use .into()
 }
 
 /// Create a `KindWithContent::DocumentImport` task that imports documents.
