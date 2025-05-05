@@ -1860,6 +1860,13 @@ mod msfj_sis_scheduler_e2e_tests {
             );
         } // Read transaction dropped here
 
+        // === Intermediate Check ===
+        // Verify the snapshot file *still* exists immediately after the creation task finished processing
+        assert!(snapshot_path.is_file(), "[Intermediate Check Failed] Snapshot file {:?} disappeared immediately after creation task finished.", snapshot_path);
+        tracing::info!(target: "snapshot_e2e_test", "[Intermediate Check Passed] Snapshot file {:?} still exists after creation task finished.", snapshot_path);
+        // === End Intermediate Check ===
+
+
         // === 4. Import Snapshot ===
         let import_task_payload = KindWithContent::SingleIndexSnapshotImport {
             source_snapshot_path: snapshot_path.to_str().unwrap().to_string(),
