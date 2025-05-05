@@ -364,7 +364,7 @@ impl IndexScheduler {
                 .process_single_index_snapshot_creation(progress, task)
                 .map(|task| (vec![task], ProcessBatchInfo::default())),
             Batch::SingleIndexSnapshotImport { source_snapshot_path, target_index_uid, task } => {
-                self.process_single_index_snapshot_import(
+                self.fj_process_single_index_snapshot_import( // Renamed function call
                     progress,
                     task,
                     source_snapshot_path,
@@ -796,7 +796,8 @@ impl IndexScheduler {
     }
 
     #[tracing::instrument(level = "trace", skip(self, _progress, task), target = "indexing::scheduler")]
-    fn process_single_index_snapshot_import(
+    // [meilisearchfj] Renamed function according to naming conventions
+    fn fj_process_single_index_snapshot_import(
         &self,
         _progress: Progress,
         mut task: Task,
