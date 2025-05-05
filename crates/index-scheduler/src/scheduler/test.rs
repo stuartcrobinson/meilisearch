@@ -1529,9 +1529,8 @@ mod msfj_sis_scheduler_import_tests {
         settings.set_non_separator_tokens(BTreeSet::from(["#".to_string()]));
         settings.set_dictionary(BTreeSet::from(["wordA".to_string(), "wordB".to_string()]));
         settings.set_search_cutoff(100);
-        // DIAGNOSE: Check the type of PrefixSearch being constructed
         // Corrected PrefixSearch construction (use IndexingTime variant)
-        let prefix_search_value = dbg!(PrefixSearch::IndexingTime);
+        let prefix_search_value = PrefixSearch::IndexingTime;
         settings.set_prefix_search(prefix_search_value); // Use imported milli::index::PrefixSearch
         // Removed incorrect set_facet_search call
 
@@ -1606,18 +1605,14 @@ mod msfj_sis_scheduler_import_tests {
         assert_eq!(imported_index.pagination_max_total_hits(&index_rtxn).unwrap(), Some(500));
 
         // Verify Proximity Precision
-        // DIAGNOSE: Check the return type of proximity_precision
-        let proximity = dbg!(imported_index.proximity_precision(&index_rtxn)).unwrap();
+        let proximity = imported_index.proximity_precision(&index_rtxn).unwrap();
         // Corrected proximity assertion (wrap in Some)
         assert_eq!(proximity, Some(ProximityPrecision::ByWord));
 
         // Verify Localized Attributes
-        // DIAGNOSE: Check the return type of localized_attributes_rules
-        let localized = dbg!(imported_index.localized_attributes_rules(&index_rtxn)).unwrap();
-        // DIAGNOSE: Check the definition/fields of LocalizedAttributesRuleView
-        // We can't dbg! the struct definition directly, but let's check the constructed value
+        let localized = imported_index.localized_attributes_rules(&index_rtxn).unwrap();
         // Corrected construction of expected_localized
-        let expected_localized_view = dbg!(vec![LocalizedAttributesRuleView {
+        let expected_localized_view = vec![LocalizedAttributesRuleView {
             // Use .into() for AttributePatterns as suggested by compiler
             attribute_patterns: vec!["title#fr".to_string()].into(),
             // Corrected Language construction (use Language::from_code) and convert to Locale
@@ -1645,9 +1640,8 @@ mod msfj_sis_scheduler_import_tests {
 
         // Verify Prefix Search (Compare milli::index::PrefixSearch)
         let prefix_search = imported_index.prefix_search(&index_rtxn).unwrap();
-        // DIAGNOSE: Check the type of expected_prefix_search
         // Corrected expected_prefix_search construction (use IndexingTime variant)
-        let expected_prefix_search = dbg!(PrefixSearch::IndexingTime); // Use milli::index::PrefixSearch::IndexingTime
+        let expected_prefix_search = PrefixSearch::IndexingTime; // Use milli::index::PrefixSearch::IndexingTime
         assert_eq!(prefix_search, Some(expected_prefix_search)); // Getter returns Option
 
         // Removed Facet Search assertion as it's not set/retrieved this way
