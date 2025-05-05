@@ -3,6 +3,7 @@ use std::ops::Deref; // Import Deref trait
 use std::panic::{catch_unwind, AssertUnwindSafe};
 use std::sync::atomic::Ordering;
 
+use meilisearch_types::error::ErrorCode; // Import the ErrorCode trait
 use meilisearch_types::batches::{BatchEnqueuedAt, BatchId};
 use meilisearch_types::heed::{RoTxn, RwTxn};
 use meilisearch_types::milli::progress::{Progress, VariableNameStep};
