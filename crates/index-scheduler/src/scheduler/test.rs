@@ -1031,12 +1031,43 @@ mod msfj_sis_scheduler_import_tests {
         // std::thread::sleep(std::time::Duration::from_millis(150));
 
         // Add extra diagnostics immediately before the assert
-        tracing::info!(target: "test::snapshot", "[create_test_snapshot] Final check before assert for path: {:?}", snapshot_path);
+        tracing::info!(target: "test::snapshot", "[create_test_snapshot] Starting final checks before assert for path: {:?}", snapshot_path);
+
+        // Check 1: List parent directory contents
+        if let Some(parent) = snapshot_path.parent() {
+             tracing::info!(target: "test::snapshot", "[create_test_snapshot] Listing contents of parent directory: {:?}", parent);
+             match std::fs::read_dir(parent) {
+                 Ok(entries) => {
+                     for entry in entries {
+                         match entry {
+                             Ok(e) => tracing::info!(target: "test::snapshot", "  - Found entry: {:?}", e.path()),
+                             Err(err) => tracing::warn!(target: "test::snapshot", "  - Error reading directory entry: {}", err),
+                         }
+                     }
+                 }
+                 Err(e) => tracing::error!(target: "test::snapshot", "  - Failed to read parent directory: {}", e),
+             }
+        } else {
+            tracing::warn!(target: "test::snapshot", "[create_test_snapshot] Could not get parent directory for listing.");
+        }
+
+        // Check 2: Attempt to open the file
+        tracing::info!(target: "test::snapshot", "[create_test_snapshot] Attempting to open file: {:?}", snapshot_path);
+        match std::fs::File::open(&snapshot_path) {
+            Ok(file) => {
+                tracing::info!(target: "test::snapshot", "  - Successfully opened file. Size: {:?}", file.metadata().map(|m| m.len()));
+                drop(file); // Close the file handle
+            }
+            Err(e) => tracing::error!(target: "test::snapshot", "  - Failed to open file: {}", e),
+        }
+
+        // Check 3: Standard checks (exists, is_file, metadata)
         let exists = snapshot_path.exists();
         let is_file = snapshot_path.is_file();
         let metadata_result = std::fs::metadata(&snapshot_path);
-        tracing::info!(target: "test::snapshot", "[create_test_snapshot] Pre-assert check: exists={}, is_file={}, metadata={:?}", exists, is_file, metadata_result);
+        tracing::info!(target: "test::snapshot", "[create_test_snapshot] Standard checks: exists={}, is_file={}, metadata={:?}", exists, is_file, metadata_result);
 
+        // The assertion that is failing
         assert!(snapshot_path.is_file(), "[create_test_snapshot] Snapshot file missing immediately after creation call: {:?}", snapshot_path);
 
         snapshot_path

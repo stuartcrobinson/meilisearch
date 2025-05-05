@@ -201,6 +201,14 @@ pub fn create_index_snapshot(
 
     // Verification moved to the caller (`create_test_snapshot`)
 
+    // Add internal verification checks just before returning Ok
+    tracing::info!(target: "snapshot_creation", "[Internal Check] Verifying snapshot file state before returning: {:?}", snapshot_filepath);
+    let internal_exists = snapshot_filepath.exists();
+    let internal_is_file = snapshot_filepath.is_file();
+    let internal_metadata_result = std::fs::metadata(&snapshot_filepath);
+    tracing::info!(target: "snapshot_creation", "[Internal Check] Pre-return state: exists={}, is_file={}, metadata={:?}", internal_exists, internal_is_file, internal_metadata_result);
+
+
     // Log final path before returning
     tracing::info!(target: "snapshot_creation", "Successfully created snapshot: {:?}", snapshot_filepath);
     tracing::info!(target: "snapshot_creation", "Exiting create_index_snapshot successfully for: {:?}", snapshot_filepath);
