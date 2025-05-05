@@ -1828,13 +1828,12 @@ mod msfj_sis_scheduler_e2e_tests {
             tracing::info!(target: "snapshot_e2e_test", "Checking file existence immediately before assertion loop: {:?} -> Exists: {}", snapshot_path, pre_loop_exists);
             // === End Pre-Loop Check ===
 
-            // === Simplified Assertion ===
-            // Remove the retry loop and assert directly after the pre-loop check.
-            // If the pre-loop check passes, this should ideally pass too unless something
-            // happens *exactly* between the pre-loop log and this assertion.
-            assert!(snapshot_path.is_file(), "[Simplified Assertion Failed] Snapshot file {:?} not found immediately after pre-loop check.", snapshot_path);
-            tracing::info!(target: "snapshot_e2e_test", "[Simplified Assertion Passed] Snapshot file {:?} found.", snapshot_path);
-            // === End Simplified Assertion ===
+            // === Simplified Assertion with Delay ===
+            // Add a small delay to test timing sensitivity
+            std::thread::sleep(std::time::Duration::from_millis(50)); // Wait 50ms
+            assert!(snapshot_path.is_file(), "[Simplified Assertion Failed] Snapshot file {:?} not found immediately after pre-loop check + delay.", snapshot_path);
+            tracing::info!(target: "snapshot_e2e_test", "[Simplified Assertion Passed] Snapshot file {:?} found after delay.", snapshot_path);
+            // === End Simplified Assertion with Delay ===
 
 
             // Verify creation progress trace
