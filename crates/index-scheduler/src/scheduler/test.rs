@@ -1665,12 +1665,13 @@ mod msfj_sis_scheduler_e2e_tests {
     use meilisearch_types::facet_values_sort::FacetValuesSort;
     use meilisearch_types::locales::LocalizedAttributesRuleView;
     use meilisearch_types::milli::vector::settings::{EmbedderSource, EmbeddingSettings};
-    use meilisearch_types::settings::{Settings, Unchecked};
+    use meilisearch_types::settings::{Settings, TypoToleranceSettings, MinWordSizeForTypos, WildcardSetting, ProximityPrecisionView, PrefixSearchSettings, SettingEmbeddingSettings, Unchecked}; // Add missing/correct types
     use meilisearch_types::tasks::{Details, KindWithContent, Status};
     use milli::index::PrefixSearch;
     use milli::proximity::ProximityPrecision;
-    use milli::update::Setting;
-    use milli::{FilterableAttributesRule, LocalizedAttributesRule, OrderBy, OrderByMap};
+    use milli::update::{Setting, RankingRule}; // Add RankingRule
+    use milli::{FilterableAttributesRule}; // Remove unused LocalizedAttributesRule, OrderBy
+    use milli::order_by_map::OrderByMap; // Correct path for OrderByMap
     use std::collections::{BTreeMap, BTreeSet, HashSet};
     use std::path::PathBuf;
 
@@ -1697,24 +1698,27 @@ mod msfj_sis_scheduler_e2e_tests {
 
         // Apply diverse settings
         let mut settings = Settings::<Unchecked>::default();
-        settings.displayed_attributes = Setting::Set(vec![S("id"), S("name")]);
-        settings.searchable_attributes = Setting::Set(vec![S("name"), S("description")]);
+        // Use WildcardSetting for displayed/searchable
+        settings.displayed_attributes = WildcardSetting::Set(vec![S("id"), S("name")]);
+        settings.searchable_attributes = WildcardSetting::Set(vec![S("name"), S("description")]);
         settings.filterable_attributes =
             Setting::Set(vec![FilterableAttributesRule::Field(S("category"))]);
         settings.sortable_attributes = Setting::Set(vec![S("price")].into_iter().collect()); // Use BTreeSet
+        // Use milli::update::RankingRule
         settings.ranking_rules = Setting::Set(vec![
-            milli::RankingRule::Typo,
-            milli::RankingRule::Words,
-            milli::RankingRule::Proximity,
+            RankingRule::Typo,
+            RankingRule::Words,
+            RankingRule::Proximity,
         ]);
         settings.stop_words = Setting::Set(BTreeSet::from([S("the"), S("a")]));
         settings.synonyms = Setting::Set(BTreeMap::from([(S("cat"), vec![S("feline")])]));
-        settings.distinct_attribute = Setting::Set(Some(S("sku")));
-        // Typo Tolerance
-        settings.typo_tolerance = Setting::Set(meilisearch_types::settings::TypoToleranceSettings {
+        // Pass String directly to Setting::Set for distinct_attribute
+        settings.distinct_attribute = Setting::Set(S("sku"));
+        // Typo Tolerance (Use imported types)
+        settings.typo_tolerance = Setting::Set(TypoToleranceSettings {
             enabled: Setting::Set(false),
             min_word_size_for_typos: Setting::Set(
-                meilisearch_types::settings::MinWordSizeForTypos {
+                MinWordSizeForTypos {
                     one_typo: Setting::Set(6),
                     two_typos: Setting::Set(10),
                 },
@@ -1735,17 +1739,19 @@ mod msfj_sis_scheduler_e2e_tests {
         settings.pagination = Setting::Set(meilisearch_types::settings::PaginationSettings {
             max_total_hits: Setting::Set(500),
         });
-        // Proximity Precision
-        settings.proximity_precision = Setting::Set(ProximityPrecision::ByWord);
-        // Embedders
+        // Proximity Precision (Convert to View type)
+        settings.proximity_precision = Setting::Set(ProximityPrecision::ByWord.into());
+        // Embedders (Wrap inner Setting in SettingEmbeddingSettings)
         let mut embedders = BTreeMap::default();
         embedders.insert(
             S("default"),
-            Setting::Set(EmbeddingSettings {
-                source: Setting::Set(EmbedderSource::UserProvided),
-                dimensions: Setting::Set(1),
-                ..Default::default()
-            }),
+            SettingEmbeddingSettings { // Wrap here
+                inner: Setting::Set(EmbeddingSettings {
+                    source: Setting::Set(EmbedderSource::UserProvided),
+                    dimensions: Setting::Set(1),
+                    ..Default::default()
+                })
+            },
         );
         settings.embedders = Setting::Set(embedders);
         // Localized Attributes
@@ -1759,8 +1765,8 @@ mod msfj_sis_scheduler_e2e_tests {
         settings.dictionary = Setting::Set(BTreeSet::from([S("wordA"), S("wordB")]));
         // Search Cutoff
         settings.search_cutoff_ms = Setting::Set(100);
-        // Prefix Search
-        settings.prefix_search = Setting::Set(PrefixSearch::IndexingTime);
+        // Prefix Search (Convert to Settings type)
+        settings.prefix_search = Setting::Set(PrefixSearch::IndexingTime.into());
         // Facet Search (Assuming it exists and needs setting)
         // settings.facet_search = Setting::Set(meilisearch_types::settings::FacetSearchSettings {
         //     enabled: Setting::Set(true),
@@ -1905,13 +1911,13 @@ mod msfj_sis_scheduler_e2e_tests {
 
         // Verify all settings (add more assertions as needed)
         assert_eq!(
-            source_index.displayed_attributes(&source_rtxn).unwrap(),
-            target_index.displayed_attributes(&target_rtxn).unwrap(),
+            source_index.displayed_fields(&source_rtxn).unwrap(), // Use displayed_fields
+            target_index.displayed_fields(&target_rtxn).unwrap(), // Use displayed_fields
             "Displayed attributes mismatch"
         );
         assert_eq!(
-            source_index.searchable_attributes(&source_rtxn).unwrap(),
-            target_index.searchable_attributes(&target_rtxn).unwrap(),
+            source_index.searchable_fields(&source_rtxn).unwrap(), // Use searchable_fields
+            target_index.searchable_fields(&target_rtxn).unwrap(), // Use searchable_fields
             "Searchable attributes mismatch"
         );
         assert_eq!(
@@ -1920,13 +1926,13 @@ mod msfj_sis_scheduler_e2e_tests {
             "Filterable attributes mismatch"
         );
         assert_eq!(
-            source_index.sortable_attributes(&source_rtxn).unwrap(),
-            target_index.sortable_attributes(&target_rtxn).unwrap(),
+            source_index.sortable_fields(&source_rtxn).unwrap(), // Use sortable_fields
+            target_index.sortable_fields(&target_rtxn).unwrap(), // Use sortable_fields
             "Sortable attributes mismatch"
         );
         assert_eq!(
-            source_index.ranking_rules(&source_rtxn).unwrap(),
-            target_index.ranking_rules(&target_rtxn).unwrap(),
+            source_index.criteria(&source_rtxn).unwrap(), // Use criteria
+            target_index.criteria(&target_rtxn).unwrap(), // Use criteria
             "Ranking rules mismatch"
         );
         // Convert stop words FST set to BTreeSet for comparison
@@ -1934,34 +1940,28 @@ mod msfj_sis_scheduler_e2e_tests {
         let target_stop_words: Option<BTreeSet<String>> = target_index.stop_words(&target_rtxn).unwrap().map(|fst| fst.stream().into_strs().unwrap().into_iter().collect());
         assert_eq!(source_stop_words, target_stop_words, "Stop words mismatch");
 
-        // Convert synonyms FST map to BTreeMap for comparison
-        let source_synonyms: Option<BTreeMap<String, Vec<String>>> = source_index.synonyms(&source_rtxn).unwrap().map(|fst| {
-            let mut map = BTreeMap::new();
-            let mut stream = fst.stream();
-            while let Some((key, value)) = stream.next() {
-                let key = String::from_utf8(key.to_vec()).unwrap();
-                let synonyms_fst = fst::Set::new(&fst.as_fst().nodes()[value as usize..]).unwrap();
-                let synonyms = synonyms_fst.stream().into_strs().unwrap();
-                map.insert(key, synonyms);
-            }
-            map
-        });
-         let target_synonyms: Option<BTreeMap<String, Vec<String>>> = target_index.synonyms(&target_rtxn).unwrap().map(|fst| {
-            let mut map = BTreeMap::new();
-            let mut stream = fst.stream();
-            while let Some((key, value)) = stream.next() {
-                let key = String::from_utf8(key.to_vec()).unwrap();
-                let synonyms_fst = fst::Set::new(&fst.as_fst().nodes()[value as usize..]).unwrap();
-                let synonyms = synonyms_fst.stream().into_strs().unwrap();
-                map.insert(key, synonyms);
-            }
-            map
-        });
+        // Convert synonyms fst::Map to BTreeMap<String, Vec<String>> for comparison
+        let convert_synonyms = |synonyms_map: Option<fst::Map<fst::automaton::AlwaysMatch>>| -> Option<BTreeMap<String, Vec<String>>> {
+            synonyms_map.map(|fst_map| {
+                let mut map = BTreeMap::new();
+                let mut stream = fst_map.stream();
+                while let Some((key_bytes, value_index)) = stream.next() {
+                    let key = String::from_utf8(key_bytes.to_vec()).unwrap();
+                    // The value_index points to the start of an fst::Set within the main FST's node data
+                    let synonyms_fst_set = fst::Set::new(&fst_map.as_fst().nodes()[value_index as usize..]).unwrap();
+                    let synonyms: Vec<String> = synonyms_fst_set.stream().into_strs().unwrap();
+                    map.insert(key, synonyms);
+                }
+                map
+            })
+        };
+        let source_synonyms = convert_synonyms(source_index.synonyms(&source_rtxn).unwrap());
+        let target_synonyms = convert_synonyms(target_index.synonyms(&target_rtxn).unwrap());
         assert_eq!(source_synonyms, target_synonyms, "Synonyms mismatch");
 
         assert_eq!(
-            source_index.distinct_attribute(&source_rtxn).unwrap(),
-            target_index.distinct_attribute(&target_rtxn).unwrap(),
+            source_index.distinct_field(&source_rtxn).unwrap(), // Use distinct_field
+            target_index.distinct_field(&target_rtxn).unwrap(), // Use distinct_field
             "Distinct attribute mismatch"
         );
         // Typo Tolerance
@@ -2012,12 +2012,24 @@ mod msfj_sis_scheduler_e2e_tests {
             target_index.proximity_precision(&target_rtxn).unwrap(),
             "Proximity precision mismatch"
         );
-        // Embedders
-        assert_eq!(
-            source_index.embedding_configs(&source_rtxn).unwrap(),
-            target_index.embedding_configs(&target_rtxn).unwrap(),
-            "Embedder configs mismatch"
-        );
+        // Embedders (Compare fields manually)
+        let source_embedders = source_index.embedding_configs(&source_rtxn).unwrap();
+        let target_embedders = target_index.embedding_configs(&target_rtxn).unwrap();
+        assert_eq!(source_embedders.len(), target_embedders.len(), "Embedder count mismatch");
+        for (src_cfg, tgt_cfg) in source_embedders.iter().zip(target_embedders.iter()) {
+             assert_eq!(src_cfg.name, tgt_cfg.name, "Embedder name mismatch");
+             // Compare relevant fields of EmbedderOptions
+             match (&src_cfg.config.embedder_options, &tgt_cfg.config.embedder_options) {
+                 (milli::vector::EmbedderOptions::HuggingFace(s), milli::vector::EmbedderOptions::HuggingFace(t)) => assert_eq!(s, t, "HuggingFace options mismatch"),
+                 (milli::vector::EmbedderOptions::OpenAi(s), milli::vector::EmbedderOptions::OpenAi(t)) => assert_eq!(s, t, "OpenAi options mismatch"),
+                 (milli::vector::EmbedderOptions::Rest(s), milli::vector::EmbedderOptions::Rest(t)) => assert_eq!(s, t, "Rest options mismatch"),
+                 (milli::vector::EmbedderOptions::UserProvided(s), milli::vector::EmbedderOptions::UserProvided(t)) => assert_eq!(s, t, "UserProvided options mismatch"),
+                 (milli::vector::EmbedderOptions::Ollama(s), milli::vector::EmbedderOptions::Ollama(t)) => assert_eq!(s, t, "Ollama options mismatch"),
+                 _ => panic!("Mismatched embedder option types"),
+             }
+             assert_eq!(src_cfg.config.prompt, tgt_cfg.config.prompt, "Embedder prompt mismatch");
+             assert_eq!(src_cfg.user_provided, tgt_cfg.user_provided, "Embedder user_provided bitmap mismatch");
+        }
         // Localized Attributes
         assert_eq!(
             source_index.localized_attributes_rules(&source_rtxn).unwrap(),
