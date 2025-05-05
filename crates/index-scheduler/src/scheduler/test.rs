@@ -14,17 +14,24 @@ use std::fs::File;
 use std::io::Write;
 use std::path::PathBuf;
 
-use crate::error::Error;
+// Removed unused import: crate::error::Error;
 use crate::fj_snapshot_utils; // [meilisearchfj] Import snapshot utils
 use crate::insta_snapshot::snapshot_index_scheduler;
 use crate::test_utils::Breakpoint::*;
+// Import handle_tasks and TempIndex from the correct module if test_utils is indeed the source
+// If these are defined elsewhere (e.g., fj_test_utils), adjust the path accordingly.
+// Assuming they are in test_utils for now based on typical structure.
 use crate::test_utils::{
-    index_creation_task, read_json, replace_document_import_task, sample_documents, TempIndex,
+    handle_tasks, index_creation_task, read_json, replace_document_import_task, sample_documents,
+    TempIndex, // Keep TempIndex import assuming it's in test_utils
 };
-use crate::{IndexScheduler, TaskId}; // Add TaskId
-use meilisearch_types::settings::{Settings, Unchecked};
+// Imports moved up
+use crate::IndexScheduler; // Removed unused TaskId import
+// Removed unused Settings and Unchecked imports
 use meilisearch_types::tasks::{Details, Status};
 use milli::update::Setting;
+use meilisearch_types::settings::FilterableAttributesRule; // Import FilterableAttributesRule
+use std::collections::HashSet; // Import HashSet
 
 #[test]
 fn insert_task_while_another_task_is_processing() {
@@ -940,16 +947,11 @@ fn create_and_list_index() {
 }
 
 // [meilisearchfj] Tests for Single Index Snapshot Import integration with the scheduler
-#[cfg(test)]
-mod msfj_sis_scheduler_import_tests {
-    use super::*;
-    use crate::test_utils::handle_tasks;
-    use meilisearch_types::milli::vector::settings::{EmbedderSource, EmbeddingSettings};
-    use meilisearch_types::settings::SettingEmbeddingSettings;
-    use meilisearch_types::tasks::Kind;
-    use tempfile::tempdir;
+// Removed unused imports: SettingEmbeddingSettings, Kind
+use meilisearch_types::milli::vector::settings::{EmbedderSource, EmbeddingSettings};
+use tempfile::tempdir;
 
-    // Helper to create a valid snapshot for import tests
+// Helper to create a valid snapshot for import tests
     fn create_test_snapshot(
         index_scheduler: &IndexScheduler,
         source_index_uid: &str,
@@ -967,7 +969,10 @@ mod msfj_sis_scheduler_import_tests {
             &index,
             index_scheduler.indexer_config(),
         );
-        settings.set_filterable_fields(vec!["name".to_string()].into_iter().collect());
+        // Correctly collect into HashSet<String>
+        settings.set_filterable_fields(
+            vec!["name".to_string()].into_iter().collect::<HashSet<String>>(),
+        );
         settings.execute(|_| {}, || false).unwrap();
         wtxn.commit().unwrap();
 
@@ -980,7 +985,9 @@ mod msfj_sis_scheduler_import_tests {
         let metadata = fj_snapshot_utils::read_metadata_inner(source_index_uid, &index, &index_rtxn).unwrap();
         drop(index_rtxn); // Drop txn before copying
 
-        fj_snapshot_utils::create_index_snapshot_raw(
+        // Use the correct function name
+        fj_snapshot_utils::create_index_snapshot(
+            source_index_uid, // Pass index_uid as first argument
             &index,
             metadata,
             &snapshot_path,
@@ -1012,7 +1019,8 @@ mod msfj_sis_scheduler_import_tests {
 
         // Assertions
         let rtxn = index_scheduler.read_txn().unwrap();
-        let task = index_scheduler.get_task(&rtxn, task_id).unwrap().unwrap();
+        // Use correct path to get_task
+        let task = index_scheduler.queue.tasks.get_task(&rtxn, task_id).unwrap().unwrap();
         assert_eq!(task.status, Status::Succeeded);
         assert!(task.error.is_none());
         match task.details {
@@ -1023,14 +1031,19 @@ mod msfj_sis_scheduler_import_tests {
             _ => panic!("Incorrect task details: {:?}", task.details),
         }
 
-        assert!(index_scheduler.index_exists(&rtxn, target_index).unwrap());
+        // Remove incorrect &rtxn argument
+        assert!(index_scheduler.index_exists(target_index).unwrap());
         let imported_index = index_scheduler.index(target_index).unwrap();
         let index_rtxn = imported_index.read_txn().unwrap();
+        // Correctly extract field names from FilterableAttributesRule enum
         let filterable: std::collections::HashSet<String> = imported_index
             .filterable_attributes_rules(&index_rtxn)
             .unwrap()
             .into_iter()
-            .map(|r| r.field().to_string()) // Extract field name
+            .filter_map(|r| match r {
+                FilterableAttributesRule::Field(name) => Some(name),
+                _ => None,
+            })
             .collect();
         assert!(filterable.contains("name"));
     }
@@ -1080,21 +1093,23 @@ mod msfj_sis_scheduler_import_tests {
 
         // 5. Assertions
         let rtxn = index_scheduler.read_txn().unwrap();
-        let task = index_scheduler.get_task(&rtxn, task_id).unwrap().unwrap();
+        // Use correct path to get_task
+        let task = index_scheduler.queue.tasks.get_task(&rtxn, task_id).unwrap().unwrap();
         assert_eq!(task.status, Status::Succeeded);
         assert!(task.error.is_none());
 
-        assert!(index_scheduler.index_exists(&rtxn, target_index).unwrap());
+        // Remove incorrect &rtxn argument
+        assert!(index_scheduler.index_exists(target_index).unwrap());
         let imported_index = index_scheduler.index(target_index).unwrap();
         let index_rtxn = imported_index.read_txn().unwrap();
         let imported_embedders = imported_index.embedding_configs(&index_rtxn).unwrap();
         assert_eq!(imported_embedders.len(), 1);
         assert!(imported_embedders.iter().any(|c| c.name == "default"));
         let config = imported_embedders.iter().find(|c| c.name == "default").unwrap();
-        assert!(matches!(config.config.embedder_options.source, EmbedderSource::UserProvided));
-        assert_eq!(config.config.embedder_options.dimensions, Some(1));
+        // Access fields from EmbeddingConfig, not EmbedderOptions directly
+        assert!(matches!(config.config.source, EmbedderSource::UserProvided));
+        assert_eq!(config.config.dimensions, Some(1));
     }
-
 
     #[test]
     fn test_import_snapshot_target_exists() {
@@ -1124,7 +1139,8 @@ mod msfj_sis_scheduler_import_tests {
 
         // Assertions
         let rtxn = index_scheduler.read_txn().unwrap();
-        let task = index_scheduler.get_task(&rtxn, task_id).unwrap().unwrap();
+        // Use correct path to get_task
+        let task = index_scheduler.queue.tasks.get_task(&rtxn, task_id).unwrap().unwrap();
         assert_eq!(task.status, Status::Failed);
         assert!(task.error.is_some());
         let error_code = task.error.as_ref().unwrap().error_code;
@@ -1153,7 +1169,8 @@ mod msfj_sis_scheduler_import_tests {
 
         // Assertions
         let rtxn = index_scheduler.read_txn().unwrap();
-        let task = index_scheduler.get_task(&rtxn, task_id).unwrap().unwrap();
+        // Use correct path to get_task
+        let task = index_scheduler.queue.tasks.get_task(&rtxn, task_id).unwrap().unwrap();
         assert_eq!(task.status, Status::Failed);
         assert!(task.error.is_some());
         let error_code = task.error.as_ref().unwrap().error_code;
@@ -1184,7 +1201,8 @@ mod msfj_sis_scheduler_import_tests {
 
         // Assertions
         let rtxn = index_scheduler.read_txn().unwrap();
-        let task = index_scheduler.get_task(&rtxn, task_id).unwrap().unwrap();
+        // Use correct path to get_task
+        let task = index_scheduler.queue.tasks.get_task(&rtxn, task_id).unwrap().unwrap();
         assert_eq!(task.status, Status::Failed);
         assert!(task.error.is_some());
         let error_code = task.error.as_ref().unwrap().error_code;
@@ -1239,7 +1257,8 @@ mod msfj_sis_scheduler_import_tests {
 
         // Assertions
         let rtxn = index_scheduler.read_txn().unwrap();
-        let task = index_scheduler.get_task(&rtxn, task_id).unwrap().unwrap();
+        // Use correct path to get_task
+        let task = index_scheduler.queue.tasks.get_task(&rtxn, task_id).unwrap().unwrap();
         assert_eq!(task.status, Status::Failed);
         assert!(task.error.is_some());
         let error_code = task.error.as_ref().unwrap().error_code;
