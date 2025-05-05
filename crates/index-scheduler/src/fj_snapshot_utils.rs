@@ -114,7 +114,6 @@ pub fn create_index_snapshot(
                 let _ = fs::remove_file(&snapshot_filepath);
                 return Err(Error::IoError(e));
             }
-            tracing::info!(target: "snapshot_creation", "Finished tar builder");
             let gz_encoder = match tar_builder.into_inner() {
                 Ok(enc) => enc,
                 Err(e) => {
@@ -139,9 +138,7 @@ pub fn create_index_snapshot(
                 let _ = fs::remove_file(&snapshot_filepath);
                 return Err(Error::IoError(e));
             }
-            tracing::info!(target: "snapshot_creation", "Synced file to disk");
             drop(file); // Ensure file handle is closed
-            tracing::info!(target: "snapshot_creation", "Closed snapshot file handle");
             // === End Restore Sync Calls ===
         }
         Err(e) => {
