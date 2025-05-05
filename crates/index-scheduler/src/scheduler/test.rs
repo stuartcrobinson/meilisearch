@@ -1390,9 +1390,6 @@ mod msfj_sis_scheduler_import_tests {
         assert!(task.error.is_some());
         // Compare numeric status code
         let status_code = task.error.as_ref().unwrap().code.as_u16();
-        // assert_eq!(status_code, 400); // SnapshotVersionMismatch (BAD_REQUEST)
-        // [meilisearchfj] DIAGNOSTIC: Temporarily check for 200 to isolate the issue.
-        // If this passes, the problem is likely in how the scheduler loop writes back the failed task status.
-        assert_eq!(status_code, 200, "Task error status code mismatch. Expected 400, found 200. This might indicate an issue with persisting the failed task state.");
+        assert_eq!(status_code, 400); // SnapshotVersionMismatch (BAD_REQUEST)
     }
 }

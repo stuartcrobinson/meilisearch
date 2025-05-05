@@ -320,7 +320,9 @@ impl IndexScheduler {
                     );
                     stop_scheduler_forever = true;
                 }
-                let error: ResponseError = err.into();
+                let error: ResponseError = err.clone().into(); // Clone err before converting
+                // [meilisearchfj] DIAGNOSTIC: Log the generated ResponseError's status code
+                tracing::error!(target: "indexing::scheduler", error_type = %err, status_code = %error.code.as_u16(), "Generating ResponseError for failed batch.");
                 for id in ids.iter() {
                     task_progress.fetch_add(1, Ordering::Relaxed);
                     let mut task = self
