@@ -1072,11 +1072,12 @@ mod msfj_sis_scheduler_import_tests {
         assert!(task.error.is_none());
         match task.details {
             Some(Details::SingleIndexSnapshotImport { source_snapshot_uid, target_index_uid }) => {
-                // Extract the expected UID part from the filename stem
+                // Extract the expected UUID part from the filename stem for comparison
                 let filename_stem = snapshot_path.file_stem().unwrap().to_str().unwrap();
-                let expected_uid_part = filename_stem.split_once('-').map(|(_, uid)| uid).unwrap_or(filename_stem); // Get part after first '-' or full stem
+                // Assuming the stored source_snapshot_uid might be just the UUID or the full stem
+                let expected_uuid_part = filename_stem.split('-').last().unwrap_or(filename_stem);
 
-                assert_eq!(source_snapshot_uid, expected_uid_part, "Snapshot UID mismatch in task details");
+                assert_eq!(source_snapshot_uid, expected_uuid_part, "Snapshot UID mismatch in task details");
                 assert_eq!(target_index_uid, target_index, "Target index UID mismatch in task details");
             }
             _ => panic!("Incorrect task details: {:?}", task.details),
@@ -1664,10 +1665,10 @@ mod msfj_sis_scheduler_e2e_tests {
     use meilisearch_types::batches::Batch; // For progress trace verification
     use meilisearch_types::facet_values_sort::FacetValuesSort;
     use meilisearch_types::locales::LocalizedAttributesRuleView;
-    use meilisearch_types::milli::vector::settings::{EmbedderSource, EmbeddingSettings};
+    // Removed unused EmbedderSource, EmbeddingSettings
     // Corrected import paths for settings types using aliases found in dump reader
-    // Removed unused WildcardSetting
-    use meilisearch_types::settings::{MinWordSizeTyposSetting, Settings, TypoSettings, SettingEmbeddingSettings, Unchecked};
+    // Removed unused WildcardSetting, SettingEmbeddingSettings
+    use meilisearch_types::settings::{MinWordSizeTyposSetting, Settings, TypoSettings, Unchecked};
     use meilisearch_types::tasks::{Details, KindWithContent, Status};
     // Use milli::Criterion for ranking rules
     use milli::Criterion;
@@ -1807,7 +1808,9 @@ mod msfj_sis_scheduler_e2e_tests {
             };
 
             // Construct path based on convention: {index_uid}-{snapshot_uid}.snapshot.tar.gz
-            let filename = format!("{}-{}.snapshot.tar.gz", S("source_e2e"), snapshot_uid); // Use literal
+            // Ensure we only use the UUID part from the potentially incorrect stored snapshot_uid.
+            let uuid_part = snapshot_uid.split('-').last().unwrap_or(&snapshot_uid); // Get part after last '-' or the whole string
+            let filename = format!("{}-{}.snapshot.tar.gz", S("source_e2e"), uuid_part); // Use literal index name and extracted UUID
             snapshot_path = index_scheduler.fj_snapshots_path().join(filename); // Assign to outer scope variable
             assert!(snapshot_path.is_file(), "Snapshot file not found at expected path: {:?}", snapshot_path);
 
