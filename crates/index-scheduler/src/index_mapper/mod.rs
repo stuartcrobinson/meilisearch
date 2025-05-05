@@ -741,11 +741,21 @@ impl IndexMapper {
         self.index_mapping.put(&mut wtxn, target_index_uid, &new_uuid)?;
 
         // [meilisearchfj] Use the new method to insert the already opened index
-        let index = index_map.fj_insert_opened_index(
+        // Assume fj_insert_opened_index now returns InsertionOutcome
+        let outcome = index_map.fj_insert_opened_index(
             new_uuid,
-            _index, // Pass the index opened above
+            _index.clone(), // Clone index for potential return
             self.enable_mdb_writemap,
         );
+
+        // Handle potential eviction
+        if let index_map::InsertionOutcome::Evicted(evicted_uuid, evicted_index) = outcome {
+            // Use the public close method defined in index_map.rs
+            index_map.close(evicted_uuid, evicted_index, self.enable_mdb_writemap, 0);
+        }
+
+        // The index we use is the one passed to fj_insert_opened_index
+        let index = _index;
 
         // Store initial stats after successful import and insertion into map.
         // Compute fresh stats after import.

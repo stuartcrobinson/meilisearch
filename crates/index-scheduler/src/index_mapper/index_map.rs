@@ -197,21 +197,10 @@ impl IndexMap {
         &mut self,
         uuid: Uuid,
         index: Index,
-        enable_mdb_writemap: bool, // Needed for closing evicted index
-    ) -> Index {
-        match self.available.insert(uuid, index.clone()) {
-            InsertionOutcome::InsertedNew => (), // Successfully inserted
-            InsertionOutcome::Evicted(evicted_uuid, evicted_index) => {
-                // Handle eviction by closing the evicted index
-                self.fj_close_internal(evicted_uuid, evicted_index, enable_mdb_writemap, 0);
-            }
-            InsertionOutcome::Replaced(_) => {
-                // This case should ideally not happen if UUIDs are unique,
-                // but panic defensively as it indicates a logic error.
-                panic!("Attempt to insert an opened index with a UUID that already exists in the available map")
-            }
-        }
-        index // Return the originally passed index
+        _enable_mdb_writemap: bool, // Keep signature, but logic moved to caller
+    ) -> InsertionOutcome<Uuid, Index> { // Change return type
+        // Return the outcome directly; caller handles eviction
+        self.available.insert(uuid, index)
     }
 
 
