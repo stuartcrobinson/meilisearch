@@ -95,7 +95,32 @@ pub fn create_index_snapshot(
     // Finish writing the archive
     tar_builder.finish().map_err(|e| Error::IoError(e))?;
     let gz_encoder = tar_builder.into_inner().map_err(|e| Error::IoError(e))?;
-    gz_encoder.finish().map_err(|e| Error::IoError(e))?;
+    let file = gz_encoder.finish().map_err(|e| Error::IoError(e))?;
+    // Explicitly sync data to disk
+    file.sync_all().map_err(|e| Error::IoError(e))?;
+    drop(file); // Ensure file handle is closed
+
+    // Verify the final snapshot file exists and has content
+    if !snapshot_filepath.exists() {
+        return Err(Error::SnapshotCreationFailed {
+            index_uid: index_uid.to_string(),
+            source: Box::new(std::io::Error::new(
+                std::io::ErrorKind::NotFound,
+                "Snapshot file does not exist after creation process completed.",
+            )),
+        });
+    }
+    let file_meta = std::fs::metadata(&snapshot_filepath).map_err(|e| Error::IoError(e))?;
+    if file_meta.len() == 0 {
+         return Err(Error::SnapshotCreationFailed {
+            index_uid: index_uid.to_string(),
+            source: Box::new(std::io::Error::new(
+                std::io::ErrorKind::InvalidData,
+                "Snapshot file was created but is empty.",
+            )),
+        });
+    }
+
 
     // Temp dir is automatically cleaned up when `temp_dir` goes out of scope here.
 
