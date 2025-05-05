@@ -814,8 +814,9 @@ impl IndexScheduler {
         mut task: Task,
         source_snapshot_path: String,
         target_index_uid: String,
-    ) -> Result<Task> {
-        let import_and_settings_result: Result<()> = (|| {
+    ) -> Result<Task> { // This function needs to return Result<Task>, not Result<()> implicitly
+        // Capture the result of the import and settings application
+        let import_and_settings_result: Result<()> = (|| { // Keep the closure for scoping
             let snapshot_path = PathBuf::from(&source_snapshot_path);
 
             // 1. Call IndexMapper to import the index data
@@ -894,12 +895,12 @@ impl IndexScheduler {
                 )),
             })?;
 
-            Ok(())
-        })();
+            Ok(()) // Closure returns Ok(()) on success
+        })(); // End of closure execution
 
-        // 3. Update task status based on the result
+        // 3. Update task status *and* determine the function's return value
         match import_and_settings_result {
-            Ok(_) => {
+            Ok(_) => { // Import and settings succeeded
                 let source_snapshot_uid = PathBuf::from(&source_snapshot_path)
                     .file_stem()
                     .and_then(|s| s.to_str())
@@ -913,15 +914,21 @@ impl IndexScheduler {
                 });
                 task.status = Status::Succeeded;
                 task.error = None;
+                Ok(task) // Return Ok(task) on success
             }
-            Err(e) => {
+            Err(e) => { // Import or settings failed
                 task.status = Status::Failed;
-                task.error = Some(e.into());
+                task.error = Some(e.into()); // Store the error in the task
                 task.details = task.kind.default_details().map(|d| d.to_failed());
+                // Propagate the error up to the caller (process_batch)
+                // We still need to return the updated task info, so we wrap the error
+                // Note: This might require process_batch to handle this specific error structure if needed,
+                // but for now, just propagating the underlying error is key.
+                // Let's return the original error `e` directly.
+                Err(e)
             }
         }
-
-        Ok(task)
+        // The Ok(task) or Err(e) is now returned directly from the match arms.
     }
 }
 

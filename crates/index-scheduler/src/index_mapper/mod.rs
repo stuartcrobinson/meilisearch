@@ -722,11 +722,12 @@ impl IndexMapper {
         tracing::info!(target: "snapshot_import", "Comparing Parsed Versions: Snapshot Major={}, Minor={}. Current Major={}, Minor={}",
                        snapshot_major, snapshot_minor, current_major, current_minor);
 
+        // Directly return the specific error if versions mismatch
         if snapshot_major != current_major || snapshot_minor != current_minor {
-             tracing::error!(target: "snapshot_import", "Version Check Failed: Major or Minor version mismatch.");
-            return Err(Error::SnapshotVersionMismatch {
+            tracing::error!(target: "snapshot_import", "Version Check Failed: Major or Minor version mismatch.");
+            return Err(Error::SnapshotVersionMismatch { // Return the specific error directly
                 path: snapshot_path.to_path_buf(),
-                snapshot_version: snapshot_version_str.clone(),
+                snapshot_version: snapshot_version_str.to_string(), // Use to_string() for clarity
                 current_version: current_version_string,
             });
         }
