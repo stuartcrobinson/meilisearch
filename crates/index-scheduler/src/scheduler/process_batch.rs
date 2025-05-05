@@ -919,11 +919,13 @@ impl IndexScheduler {
             }
             Err(e) => { // Import or settings failed
                 task.status = Status::Failed;
-                // Use the From<Error> implementation for ResponseError, which correctly
-                // handles private fields and methods via the ErrorCode trait.
-                // We still need the original error `e` to return, so clone it before converting.
-                let response_error: meilisearch_types::error::ResponseError = e.clone().into();
-                task.error = Some(response_error); // Store the converted ResponseError
+                // Use the public `from_msg` constructor as suggested by the compiler error.
+                // We get the necessary components from the ErrorCode trait implemented on `e`.
+                let response_error = meilisearch_types::error::ResponseError::from_msg(
+                    e.to_string(), // The error message
+                    e.error_code(), // The error code variant
+                );
+                task.error = Some(response_error); // Store the constructed ResponseError
                 task.details = task.kind.default_details().map(|d| d.to_failed());
                 // Propagate the original error `e` up to the caller (process_batch)
                 // Note: This might require process_batch to handle this specific error structure if needed,
