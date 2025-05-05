@@ -775,17 +775,23 @@ impl IndexScheduler {
                 progress.update_progress(FjSingleIndexSnapshotCreationProgress::PackagingSnapshot);
 
                 // Extract ONLY the UUID part from the filename stem for the details
+                // Corrected logic: split stem by '.' first, then by '-'
                 let snapshot_uid = snapshot_path
-                    .file_stem() // Get "index_uid-uuid"
+                    .file_stem() // Get "index_uid-uuid.snapshot.tar"
                     .and_then(|s| s.to_str())
-                    .and_then(|s| s.split('-').last()) // Get part after last '-' (the UUID)
+                    .and_then(|stem| stem.split('.').next()) // Get "index_uid-uuid"
+                    .and_then(|name_part| name_part.split('-').last()) // Get "uuid"
                     .map(|uid| uid.to_string()) // Convert to String
                     .unwrap_or_else(|| {
                         // Fallback if filename format is unexpected
-                        tracing::warn!("Could not extract snapshot UUID from filename stem: {:?}", snapshot_path.file_stem());
+                        tracing::warn!(
+                            "Could not extract snapshot UUID from filename stem: {:?}",
+                            snapshot_path.file_stem()
+                        );
                         "unknown".to_string()
                     });
 
+                tracing::info!(target: "snapshot_creation", "Extracted snapshot_uid to store in task details: {}", snapshot_uid); // Add logging
 
                 task.status = Status::Succeeded;
                 if let Some(Details::SingleIndexSnapshotCreation { snapshot_uid: details_uid }) =
