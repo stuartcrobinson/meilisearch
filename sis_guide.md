@@ -263,8 +263,11 @@ This section outlines the steps to expose the single-index snapshot functionalit
 
 ### 10. Define API Routes and Payloads
 
-*   **Files**: `crates/meilisearch/src/routes/snapshot.rs` (or new `fj_snapshot.rs`), `crates/meilisearch-types/src/snapshot.rs` (if needed for request/response bodies).
+*   **Files**: `crates/meilisearch/src/routes/snapshot.rs` (or new `fj_snapshot.rs`), `crates/meilisearch-types/src/snapshot.rs`.
 *   **Action**:
+    *   **Payload Struct**: Define `SingleIndexSnapshotImportPayload` in `meilisearch-types/src/snapshot.rs`.
+        *   Fields: `source_snapshot_filename: String`, `target_index_uid: String`.
+        *   Add necessary `serde` derives (`Deserialize`).
     *   **Creation Route**: Define a `POST` route, e.g., `/indexes/{index_uid}/snapshots`.
         *   No request body needed.
         *   Response body: Standard `TaskInfo`.
@@ -289,7 +292,11 @@ This section outlines the steps to expose the single-index snapshot functionalit
     *   **Import Handler**:
         *   Create a new `async fn fj_import_index_snapshot(index_scheduler: Data<IndexScheduler>, payload: Json<SingleIndexSnapshotImportPayload>) -> Result<Json<TaskInfo>, ResponseError>`.
         *   Deserialize and validate the payload (`source_snapshot_filename`, `target_index_uid`).
-        *   **Security Check**: Construct the full `source_snapshot_path` by joining the configured `snapshots_path` with the provided `source_snapshot_filename`. Ensure this path is canonicalized and still resides within the allowed `snapshots_path` directory to prevent path traversal attacks. Fail with an appropriate error if validation fails.
+        *   **Security Check**:
+            *   Validate `source_snapshot_filename`: Ensure it's a valid filename and doesn't contain path traversal elements (like `..`).
+            *   Construct the full `source_snapshot_path` by joining the configured `snapshots_path` (from `Opt`) with the validated `source_snapshot_filename`.
+            *   Ensure the canonicalized `source_snapshot_path` still resides within the allowed `snapshots_path` directory.
+            *   Fail with an appropriate `ResponseError` (e.g., `invalid_snapshot_path`) if any validation fails.
         *   Construct `KindWithContent::SingleIndexSnapshotImport` using the validated full path.
         *   Call `index_scheduler.register(task)`.
         *   Return the resulting `TaskInfo`.
@@ -320,7 +327,7 @@ This section outlines the steps to expose the single-index snapshot functionalit
         *   Verify a `202 Accepted` response with valid `TaskInfo`.
         *   Wait for the task to complete (`Succeeded`).
         *   Verify the new index (`target_index_uid`) exists and contains the expected data/settings.
-    *   **Error Tests**: Test invalid payloads, non-existent source snapshots, target index already existing, invalid snapshot paths (security), etc., verifying appropriate error responses (e.g., 400, 404, 409).
+    *   **Error Tests**: Test invalid payloads (400), non-existent source snapshots (404), target index already existing (409), invalid snapshot paths/filenames (400), etc., verifying appropriate HTTP status codes and error messages.
 *   **Step Completion Check**: Add the `cargo test` command here to run only the tests implemented for this step.
 
 ## E. Error Handling Guide
