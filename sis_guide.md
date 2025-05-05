@@ -233,6 +233,11 @@ crates/index-scheduler/src/scheduler/process_batch.rs
 *   **Testing (TDD)**: Enhance tests from steps 4 & 6 to check the `details` field of completed tasks for expected progress steps.
 *   **Step Completion Check**: Add the `cargo test` command here to run only the tests implemented for this step.
 
+### 8. End to end tests 
+```
+cargo test -p index-scheduler -- msfj_sis_scheduler_e2e_tests::test_e2e_snapshot_create_import_verify
+```
+
 ## D. Error Handling Guide
 
 Follow these guidelines for handling errors related to the new snapshot tasks:
