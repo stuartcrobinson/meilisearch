@@ -774,16 +774,18 @@ impl IndexScheduler {
                 // [meilisearchfj] Report progress after successful packaging
                 progress.update_progress(FjSingleIndexSnapshotCreationProgress::PackagingSnapshot);
 
-                // Extract the UID from the filename for the details
+                // Extract ONLY the UUID part from the filename stem for the details
                 let snapshot_uid = snapshot_path
-                    .file_stem()
+                    .file_stem() // Get "index_uid-uuid"
                     .and_then(|s| s.to_str())
-                    .and_then(|s| s.split_once('-').map(|(_, uid)| uid.to_string()))
+                    .and_then(|s| s.split('-').last()) // Get part after last '-' (the UUID)
+                    .map(|uid| uid.to_string()) // Convert to String
                     .unwrap_or_else(|| {
-                        // Fallback if filename format is unexpected, though it shouldn't happen
-                        tracing::warn!("Could not extract snapshot UID from filename: {:?}", snapshot_path);
+                        // Fallback if filename format is unexpected
+                        tracing::warn!("Could not extract snapshot UUID from filename stem: {:?}", snapshot_path.file_stem());
                         "unknown".to_string()
                     });
+
 
                 task.status = Status::Succeeded;
                 if let Some(Details::SingleIndexSnapshotCreation { snapshot_uid: details_uid }) =
