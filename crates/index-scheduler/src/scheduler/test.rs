@@ -973,27 +973,13 @@ mod msfj_sis_scheduler_import_tests {
             .with_test_writer() // Use test writer to work with cargo test capture
             .try_init(); // Use try_init to avoid panic if already initialized
 
-        // 1. Create source index and add data/settings
-        let task = index_creation_task(source_index_uid, Some("id"));
-        let task_id = index_scheduler.register(task, None, false).unwrap().uid; // Capture task_id
-        handle.advance_one_successful_batch(); // Use handle to process the task
-        // Explicitly wait for the creation task to ensure index is fully ready
-        handle.wait_task(task_id).await; // Use await as wait_task is async
+        // Assume the index `source_index_uid` already exists and is prepared by the caller.
+        // Get the handle to the existing index.
+        let index = index_scheduler.index(source_index_uid).unwrap_or_else(|_| {
+            panic!("Source index '{}' not found before calling create_test_snapshot", source_index_uid);
+        });
 
-        let index = index_scheduler.index(source_index_uid).unwrap();
-        let mut wtxn = index.write_txn().unwrap();
-        // Apply settings *before* snapshotting
-        // Define settings within this scope
-        let mut settings = milli::update::Settings::new(
-            &mut wtxn,
-            &index,
-            index_scheduler.indexer_config(),
-        );
-        settings.set_filterable_fields(vec![FilterableAttributesRule::Field("name".to_string())]);
-        settings.execute(|_| {}, || false).unwrap();
-        wtxn.commit().unwrap(); // Commit settings changes
-
-        // 2. Create the snapshot using the internal utility function
+        // Create the snapshot using the internal utility function
         let snapshot_dir = index_scheduler.fj_snapshots_path();
         // Verify snapshot directory exists and is writable
         if !snapshot_dir.exists() {
@@ -1089,12 +1075,29 @@ mod msfj_sis_scheduler_import_tests {
         let (index_scheduler, mut handle) = IndexScheduler::test(true, vec![]);
         let source_index = "source_index_import_happy";
         let target_index = "target_index_import_happy";
-        // let snapshot_filename = format!("{}-test.snapshot.tar.gz", source_index); // No longer needed here
 
+        // 1. Create and prepare the source index
+        let creation_task = index_creation_task(source_index, Some("id"));
+        let _creation_task_id = index_scheduler.register(creation_task, None, false).unwrap().uid;
+        handle.advance_one_successful_batch(); // Process index creation
+        // Apply any necessary settings here if needed for the happy path test
+        // (Currently create_test_snapshot applied filterable: name)
+        let index = index_scheduler.index(source_index).unwrap();
+        let mut wtxn = index.write_txn().unwrap();
+        let mut settings = milli::update::Settings::new(
+            &mut wtxn,
+            &index,
+            index_scheduler.indexer_config(),
+        );
+        settings.set_filterable_fields(vec![FilterableAttributesRule::Field("name".to_string())]);
+        settings.execute(|_| {}, || false).unwrap();
+        wtxn.commit().unwrap();
+
+        // 2. Create the snapshot of the prepared index
         let snapshot_path =
             create_test_snapshot(&index_scheduler, &mut handle, source_index).await; // Add .await
 
-        // Register the import task
+        // 3. Register the import task
         let import_task = KindWithContent::SingleIndexSnapshotImport {
             source_snapshot_path: snapshot_path.to_str().unwrap().to_string(),
             target_index_uid: target_index.to_string(),
@@ -1235,13 +1238,29 @@ mod msfj_sis_scheduler_import_tests {
     async fn test_import_snapshot_target_exists() { // Make test async
         let (index_scheduler, mut handle) = IndexScheduler::test(true, vec![]);
         let source_index = "source_index_import_exists";
-        let target_index = "target_index_import_exists"; // Same name for source and target
-        // let snapshot_filename = format!("{}-test.snapshot.tar.gz", source_index); // No longer needed here
+        let target_index = "target_index_import_exists";
 
+        // 1. Create and prepare the source index
+        let source_creation_task = index_creation_task(source_index, Some("id"));
+        let _source_creation_task_id = index_scheduler.register(source_creation_task, None, false).unwrap().uid;
+        handle.advance_one_successful_batch(); // Process source index creation
+        // Apply settings matching what create_test_snapshot used to do
+        let index = index_scheduler.index(source_index).unwrap();
+        let mut wtxn = index.write_txn().unwrap();
+        let mut settings = milli::update::Settings::new(
+            &mut wtxn,
+            &index,
+            index_scheduler.indexer_config(),
+        );
+        settings.set_filterable_fields(vec![FilterableAttributesRule::Field("name".to_string())]);
+        settings.execute(|_| {}, || false).unwrap();
+        wtxn.commit().unwrap();
+
+        // 2. Create the snapshot of the prepared source index
         let snapshot_path =
             create_test_snapshot(&index_scheduler, &mut handle, source_index).await; // Add .await
 
-        // Create the target index beforehand
+        // 3. Create the target index beforehand (this is the point of the test)
         let creation_task = index_creation_task(target_index, Some("id"));
         let _creation_task_id = index_scheduler.register(creation_task, None, false).unwrap().uid;
         handle.advance_one_successful_batch(); // Use handle to process the task
@@ -1363,14 +1382,29 @@ mod msfj_sis_scheduler_import_tests {
         let (index_scheduler, mut handle) = IndexScheduler::test(true, vec![]);
         let source_index = "source_index_version_mismatch";
         let target_index = "target_index_version_mismatch";
-        // let snapshot_filename = format!("{}-test.snapshot.tar.gz", source_index); // No longer needed here
 
-        // Create a valid snapshot first
+        // 1. Create and prepare the source index
+        let source_creation_task = index_creation_task(source_index, Some("id"));
+        let _source_creation_task_id = index_scheduler.register(source_creation_task, None, false).unwrap().uid;
+        handle.advance_one_successful_batch(); // Process source index creation
+        // Apply settings matching what create_test_snapshot used to do
+        let index = index_scheduler.index(source_index).unwrap();
+        let mut wtxn = index.write_txn().unwrap();
+        let mut settings = milli::update::Settings::new(
+            &mut wtxn,
+            &index,
+            index_scheduler.indexer_config(),
+        );
+        settings.set_filterable_fields(vec![FilterableAttributesRule::Field("name".to_string())]);
+        settings.execute(|_| {}, || false).unwrap();
+        wtxn.commit().unwrap();
+
+        // 2. Create the snapshot of the prepared source index
         let snapshot_path =
             create_test_snapshot(&index_scheduler, &mut handle, source_index).await; // Add .await
 
-        // Check snapshot exists *after* creation
-        // Add a small delay for potential filesystem sync issues (though sync_all should handle this)
+        // 3. Check snapshot exists *after* creation
+        // Add a small delay for potential filesystem sync issues
         std::thread::sleep(std::time::Duration::from_millis(100));
 
         assert!(snapshot_path.is_file(), "[test_import_snapshot_version_mismatch] Snapshot file missing after creation: {:?}", snapshot_path);
