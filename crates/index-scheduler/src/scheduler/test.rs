@@ -942,8 +942,8 @@ fn create_and_list_index() {
 mod msfj_sis_scheduler_import_tests {
     use super::*; // Keep import from parent
     // Move necessary imports inside the module
-    // Revert to crate::test_utils path
-    use crate::test_utils::{handle_tasks, TempIndex};
+    // Try importing from parent module scope
+    use super::{handle_tasks, TempIndex};
     use meilisearch_types::milli::vector::settings::{EmbedderSource, EmbeddingSettings};
     // Removed unused import: SettingEmbeddingSettings
     use meilisearch_types::tasks::KindWithContent;
@@ -1113,9 +1113,9 @@ mod msfj_sis_scheduler_import_tests {
         assert_eq!(imported_embedders.len(), 1);
         assert!(imported_embedders.iter().any(|c| c.name == "default"));
         let config = imported_embedders.iter().find(|c| c.name == "default").unwrap();
-        // Access fields via embedder_options again
-        assert!(matches!(config.config.embedder_options.source, EmbedderSource::UserProvided));
-        assert_eq!(config.config.embedder_options.dimensions, Some(1));
+        // Try accessing fields directly on config.config
+        assert!(matches!(config.config.source, EmbedderSource::UserProvided));
+        assert_eq!(config.config.dimensions, Some(1));
     }
 
     #[test]
