@@ -248,7 +248,82 @@ cargo test -p index-scheduler -- msfj_sis_scheduler_e2e_tests::test_e2e_snapshot
     *   Run all `msfj_sis_` tests one last time: `cargo test -p index-scheduler -- msfj_sis_ --nocapture`.
 *   **Goal**: Confirm the backend implementation is complete, correct according to the guide, and robust enough to serve as the foundation for the API layer.
 
-## D. Error Handling Guide
+## D. API Implementation Guide
+
+This section outlines the steps to expose the single-index snapshot functionality via the Meilisearch HTTP API.
+
+### Guiding Principles:
+
+*   **Consistency**: Follow existing API patterns for task-based operations (e.g., returning `TaskInfo`).
+*   **Validation**: Implement thorough validation for request payloads and path parameters.
+*   **Security**: Ensure snapshot paths are handled securely (e.g., restricted to the configured `snapshots_path`).
+*   **Testing**: Write integration tests covering successful requests, validation errors, and interaction with the task queue.
+
+### Implementation Steps:
+
+### 10. Define API Routes and Payloads
+
+*   **Files**: `crates/meilisearch/src/routes/snapshot.rs` (or new `fj_snapshot.rs`), `crates/meilisearch-types/src/snapshot.rs` (if needed for request/response bodies).
+*   **Action**:
+    *   **Creation Route**: Define a `POST` route, e.g., `/indexes/{index_uid}/snapshots`.
+        *   No request body needed.
+        *   Response body: Standard `TaskInfo`.
+    *   **Import Route**: Define a `POST` route, e.g., `/snapshots/import`.
+        *   Request Body: Define a struct (e.g., `SingleIndexSnapshotImportPayload`) with fields:
+            *   `source_snapshot_filename`: `String` (Filename only, relative to `snapshots_path`).
+            *   `target_index_uid`: `String`.
+        *   Response body: Standard `TaskInfo`.
+    *   Use `serde` for request/response body serialization/deserialization.
+*   **Testing (TDD)**: Define the structs and ensure they serialize/deserialize correctly. (Full route testing comes later).
+
+### 11. Implement API Handlers
+
+*   **Files**: `crates/meilisearch/src/routes/snapshot.rs` (or new `fj_snapshot.rs`).
+*   **Action**:
+    *   **Creation Handler**:
+        *   Create a new `async fn fj_create_index_snapshot(index_scheduler: Data<IndexScheduler>, index_uid: Path<String>) -> Result<Json<TaskInfo>, ResponseError>`.
+        *   Extract `index_uid`.
+        *   Construct `KindWithContent::SingleIndexSnapshotCreation`.
+        *   Call `index_scheduler.register(task)`.
+        *   Return the resulting `TaskInfo`.
+    *   **Import Handler**:
+        *   Create a new `async fn fj_import_index_snapshot(index_scheduler: Data<IndexScheduler>, payload: Json<SingleIndexSnapshotImportPayload>) -> Result<Json<TaskInfo>, ResponseError>`.
+        *   Deserialize and validate the payload (`source_snapshot_filename`, `target_index_uid`).
+        *   **Security Check**: Construct the full `source_snapshot_path` by joining the configured `snapshots_path` with the provided `source_snapshot_filename`. Ensure this path is canonicalized and still resides within the allowed `snapshots_path` directory to prevent path traversal attacks. Fail with an appropriate error if validation fails.
+        *   Construct `KindWithContent::SingleIndexSnapshotImport` using the validated full path.
+        *   Call `index_scheduler.register(task)`.
+        *   Return the resulting `TaskInfo`.
+*   **Testing (TDD)**: Write unit tests for the handlers, mocking `IndexScheduler::register` to verify that it's called with the correct `KindWithContent` based on input. Test payload validation and path security checks.
+
+### 12. Register API Routes
+
+*   **File**: `crates/meilisearch/src/routes/mod.rs`.
+*   **Action**:
+    *   Import the new handler functions.
+    *   Add the new routes (`/indexes/{index_uid}/snapshots` and `/snapshots/import`) to the `Router` configuration, likely within the `snapshots` service scope or a relevant index scope.
+*   **Testing (TDD)**: Manual verification or integration tests (Step 13).
+
+### 13. Add API Integration Tests
+
+*   **Files**: `meilisearch/tests/snapshots/mod.rs` (or a new `fj_snapshot.rs` test file).
+*   **Action**:
+    *   Write integration tests using the Meilisearch test framework (`Client`).
+    *   **Creation Test**:
+        *   Create a test index.
+        *   Call the `POST /indexes/{index_uid}/snapshots` endpoint.
+        *   Verify a `202 Accepted` response with valid `TaskInfo`.
+        *   Wait for the task to complete (`Succeeded`).
+        *   Verify the snapshot file exists in the expected location.
+    *   **Import Test**:
+        *   Create a snapshot using the creation endpoint or manually place one.
+        *   Call the `POST /snapshots/import` endpoint with the correct payload.
+        *   Verify a `202 Accepted` response with valid `TaskInfo`.
+        *   Wait for the task to complete (`Succeeded`).
+        *   Verify the new index (`target_index_uid`) exists and contains the expected data/settings.
+    *   **Error Tests**: Test invalid payloads, non-existent source snapshots, target index already existing, invalid snapshot paths (security), etc., verifying appropriate error responses (e.g., 400, 404, 409).
+*   **Step Completion Check**: Add the `cargo test` command here to run only the tests implemented for this step.
+
+## E. Error Handling Guide
 
 Follow these guidelines for handling errors related to the new snapshot tasks:
 
