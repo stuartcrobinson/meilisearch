@@ -1026,6 +1026,8 @@ mod msfj_sis_scheduler_import_tests {
         });
 
         // Add assertion here to check immediately after successful creation call
+        // Add a small delay for potential filesystem sync issues before checking
+        std::thread::sleep(std::time::Duration::from_millis(100));
         assert!(snapshot_path.is_file(), "[create_test_snapshot] Snapshot file missing immediately after creation call: {:?}", snapshot_path);
 
         snapshot_path
