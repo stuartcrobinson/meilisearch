@@ -1,6 +1,6 @@
 # Coding Recommendations (Learnings from index-scheduler tests)
 
-**Mission**: This document captures specific, novel coding patterns, type usages, and best practices learned *directly* from debugging sessions within the `meilisearchfj` codebase, particularly related to the Single Index Snapshot feature. Avoid adding general Rust or Meilisearch knowledge; focus only on actionable insights gained from solving concrete problems encountered during development in this specific context.
+**Mission**: This document captures specific, novel coding patterns, type usages, and best practices learned *directly* from debugging sessions within the `meilisearchfj` codebase. Avoid adding general Rust or Meilisearch knowledge; focus only on actionable insights gained from solving concrete problems encountered during development in this specific context.
 
 *   **`'static` Lifetimes**: Functions requiring `&'static str` (like `replace_document_import_task`) cannot accept borrows (`&`) of owned `String`s created at runtime (e.g., via `S()` macro). The temporary borrow doesn't live long enough. Pass string literals (`"..."`) directly in these cases.
 *   **`String` vs `&str`**: When a function expects `&str` but receives a `String` (often from `S()`), borrow it (`&my_string`) as suggested by E0308.
