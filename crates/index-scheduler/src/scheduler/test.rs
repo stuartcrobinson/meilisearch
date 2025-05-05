@@ -1244,7 +1244,11 @@ mod msfj_sis_scheduler_import_tests {
         let temp_extract_dir = tempdir().unwrap();
         let snapshot_file = std::fs::File::open(&snapshot_path).unwrap(); // Use full path
         let mut archive = tar::Archive::new(flate2::read::GzDecoder::new(snapshot_file));
-        archive.unpack(temp_extract_dir.path()).unwrap();
+        // Add explicit error mapping for unpack
+        archive.unpack(temp_extract_dir.path()).map_err(|e| {
+            format!("Failed to unpack snapshot '{}': {}", snapshot_path.display(), e)
+        }).unwrap();
+
 
         let metadata_path = temp_extract_dir.path().join("metadata.json");
         let mut metadata: serde_json::Value = serde_json::from_reader(std::fs::File::open(&metadata_path).unwrap()).unwrap(); // Use full path
