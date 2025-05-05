@@ -887,7 +887,7 @@ impl IndexScheduler {
                 settings_builder.set_embedder_settings(converted_embedders);
             }
             // Localized Attributes (Assuming it exists in Settings<Unchecked>)
-            if let Setting::Set(val) = settings.localized_attributes { settings_builder.set_localized_attributes(val); }
+            if let Setting::Set(val) = settings.localized_attributes { settings_builder.set_localized_attributes_rules(val); } // Use correct method name
             // Separator Tokens (Assuming it exists in Settings<Unchecked>)
             if let Setting::Set(val) = settings.separator_tokens { settings_builder.set_separator_tokens(val); }
             // Non-Separator Tokens (Assuming it exists in Settings<Unchecked>)
@@ -895,9 +895,9 @@ impl IndexScheduler {
             // Dictionary (Assuming it exists in Settings<Unchecked>)
             if let Setting::Set(val) = settings.dictionary { settings_builder.set_dictionary(val); }
             // Search Cutoff (Assuming it exists in Settings<Unchecked>)
-            if let Setting::Set(val) = settings.search_cutoff_ms { settings_builder.set_search_cutoff(Some(val)); }
+            if let Setting::Set(val) = settings.search_cutoff_ms { settings_builder.set_search_cutoff(val); } // Pass u64 directly
             // Prefix Search (Assuming it exists in Settings<Unchecked>)
-            if let Setting::Set(val) = settings.prefix_search { settings_builder.set_prefix_search(val); }
+            if let Setting::Set(val) = settings.prefix_search { settings_builder.set_prefix_search(val.into()); } // Add .into()
             // Facet Search (Assuming it exists in Settings<Unchecked>)
             if let Setting::Set(val) = settings.facet_search { settings_builder.set_facet_search(val); }
 
