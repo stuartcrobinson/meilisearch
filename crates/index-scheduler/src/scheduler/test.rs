@@ -941,7 +941,7 @@ fn create_and_list_index() {
 mod msfj_sis_scheduler_import_tests {
     use super::*; // Keep import from parent
     // Move necessary imports inside the module
-    // Revert to crate::test_utils path now that items are public
+    // Use crate::test_utils path
     use crate::test_utils::{handle_tasks, TempIndex};
     use meilisearch_types::milli::vector::settings::{EmbedderSource, EmbeddingSettings};
     // Removed unused import: SettingEmbeddingSettings
