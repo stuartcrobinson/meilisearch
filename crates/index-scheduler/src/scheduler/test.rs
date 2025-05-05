@@ -1087,10 +1087,10 @@ mod msfj_sis_scheduler_import_tests {
         let (index_scheduler, mut handle) = IndexScheduler::test(true, vec![]);
         let source_index = "source_index_import_happy";
         let target_index = "target_index_import_happy";
-        let snapshot_filename = format!("{}-test.snapshot.tar.gz", source_index);
+        // let snapshot_filename = format!("{}-test.snapshot.tar.gz", source_index); // No longer needed here
 
         let snapshot_path =
-            create_test_snapshot(&index_scheduler, &mut handle, source_index, &snapshot_filename); // Pass handle
+            create_test_snapshot(&index_scheduler, &mut handle, source_index); // Remove extra argument
 
         // Register the import task
         let import_task = KindWithContent::SingleIndexSnapshotImport {
@@ -1209,10 +1209,10 @@ mod msfj_sis_scheduler_import_tests {
         let (index_scheduler, mut handle) = IndexScheduler::test(true, vec![]);
         let source_index = "source_index_import_exists";
         let target_index = "target_index_import_exists"; // Same name for source and target
-        let snapshot_filename = format!("{}-test.snapshot.tar.gz", source_index);
+        // let snapshot_filename = format!("{}-test.snapshot.tar.gz", source_index); // No longer needed here
 
         let snapshot_path =
-            create_test_snapshot(&index_scheduler, &mut handle, source_index, &snapshot_filename); // Pass handle
+            create_test_snapshot(&index_scheduler, &mut handle, source_index); // Remove extra argument
 
         // Create the target index beforehand
         let creation_task = index_creation_task(target_index, Some("id"));
@@ -1311,11 +1311,11 @@ mod msfj_sis_scheduler_import_tests {
         let (index_scheduler, mut handle) = IndexScheduler::test(true, vec![]);
         let source_index = "source_index_version_mismatch";
         let target_index = "target_index_version_mismatch";
-        let snapshot_filename = format!("{}-test.snapshot.tar.gz", source_index);
+        // let snapshot_filename = format!("{}-test.snapshot.tar.gz", source_index); // No longer needed here
 
         // Create a valid snapshot first
         let snapshot_path =
-            create_test_snapshot(&index_scheduler, &mut handle, source_index, &snapshot_filename); // Pass handle
+            create_test_snapshot(&index_scheduler, &mut handle, source_index); // Remove extra argument
 
         // Check snapshot exists *after* creation
         // Add a small delay for potential filesystem sync issues (though sync_all should handle this)

@@ -756,10 +756,8 @@ impl IndexScheduler {
             .map_err(|e| Error::SnapshotCreationFailed {
                 index_uid: index_uid.clone(),
                 source: Box::new(e),
-            })?;
-
-            // Return the full path on success
-            Ok(snapshot_path)
+            })
+            // No semicolon here, the result of create_index_snapshot is the closure's return value
         })();
 
         // Always release the lock, regardless of success or failure

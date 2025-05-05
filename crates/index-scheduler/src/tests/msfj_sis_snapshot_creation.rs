@@ -197,7 +197,7 @@ mod msfj_sis_snapshot_creation_tests {
         assert!(snapshot_path.exists());
 
         // Unpack and verify basic structure
-        let snapshot_file = File::open(&snapshot_filepath).unwrap();
+        let snapshot_file = File::open(&snapshot_path).unwrap(); // Use snapshot_path
         let tar_gz = GzDecoder::new(snapshot_file);
         let mut archive = Archive::new(tar_gz);
         let temp_unpack_dir = tempdir().unwrap();
@@ -375,7 +375,7 @@ mod msfj_sis_snapshot_creation_tests {
         assert!(snapshot_path.exists(), "Snapshot file was not created");
 
         // Unpack
-        let snapshot_file = File::open(&snapshot_filepath).unwrap();
+        let snapshot_file = File::open(&snapshot_path).unwrap(); // Use snapshot_path
         let tar_gz = GzDecoder::new(snapshot_file);
         let mut archive = Archive::new(tar_gz);
         let temp_unpack_dir = tempdir().unwrap();
