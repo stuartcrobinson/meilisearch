@@ -1465,8 +1465,8 @@ mod msfj_sis_scheduler_import_tests {
         // Let's try importing the parent and see what the compiler suggests for facet
         // use meilisearch_types::settings; // Keep this commented unless needed
 
-        // Corrected facet import path - Assuming they are directly under settings
-        use meilisearch_types::settings::{FacetSearchSettings, OrderByType};
+        // Corrected facet import path - They are in facet_values_sort module
+        use meilisearch_types::facet_values_sort::{FacetSearchSettings, OrderByType};
         // Removed unused: PrefixSearchSettings, FacetingSettings, MinWordSizeForTypos, PaginationSettings, TypoToleranceSettings
         use milli::index::PrefixSearch; // Correct path
         use milli::proximity::ProximityPrecision; // Correct path
@@ -1478,7 +1478,7 @@ mod msfj_sis_scheduler_import_tests {
         // Corrected Language import path - Assuming it's re-exported under tokenizer
         use milli::tokenizer::Language;
         use std::collections::{BTreeMap, BTreeSet, HashSet};
-        use std::str::FromStr; // Keep FromStr for Language parsing
+        // Removed unused FromStr import
 
         let (index_scheduler, mut handle) = IndexScheduler::test(true, vec![]);
         let source_index = "source_index_all_settings";
