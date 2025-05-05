@@ -15,15 +15,14 @@ use std::fs::File;
 
 use crate::insta_snapshot::snapshot_index_scheduler;
 use crate::test_utils::Breakpoint::*;
-// Use fj_test_utils for handle_tasks and TempIndex
-use crate::fj_test_utils::{handle_tasks, TempIndex};
+// Use test_utils for handle_tasks and TempIndex
+use crate::test_utils::{handle_tasks, TempIndex};
 use crate::test_utils::{
     index_creation_task, read_json, replace_document_import_task, sample_documents,
 };
 // Imports moved up
 use crate::IndexScheduler;
-// Removed unused imports: Details, Status, Setting
-use milli::FilterableAttributesRule; // Import FilterableAttributesRule from milli
+// Removed unused import: FilterableAttributesRule
 
 #[test]
 fn insert_task_while_another_task_is_processing() {
@@ -943,15 +942,15 @@ fn create_and_list_index() {
 mod msfj_sis_scheduler_import_tests {
     use super::*; // Keep import from parent
     // Move necessary imports inside the module
-    use crate::fj_test_utils::handle_tasks; // Use fj_test_utils
+    use crate::test_utils::handle_tasks; // Use test_utils
     use meilisearch_types::milli::vector::settings::{EmbedderSource, EmbeddingSettings};
     // Removed unused import: SettingEmbeddingSettings
     use meilisearch_types::tasks::KindWithContent;
     use tempfile::tempdir;
-    use std::collections::{BTreeMap, HashSet}; // Import BTreeMap and HashSet
+    use std::collections::BTreeMap; // Removed unused HashSet import
     use big_s::S; // Import S
     use std::path::PathBuf; // Import PathBuf
-    use std::fs::File; // Import File
+    use std::fs::File;
     use std::io::Write;
     use crate::{IndexScheduler, fj_snapshot_utils};
     use crate::test_utils::index_creation_task;
@@ -1151,8 +1150,8 @@ mod msfj_sis_scheduler_import_tests {
         let task = index_scheduler.queue.tasks.get_task(&rtxn, task_id).unwrap().unwrap();
         assert_eq!(task.status, Status::Failed);
         assert!(task.error.is_some());
-        // Use error_code() method
-        let error_code = task.error.as_ref().unwrap().error_code();
+        // Use direct field access for error_code
+        let error_code = task.error.as_ref().unwrap().error_code;
         assert_eq!(error_code, meilisearch_types::error::Code::IndexAlreadyExists);
         match task.details {
             Some(Details::SingleIndexSnapshotImport { .. }) => {} // Expected structure
@@ -1182,8 +1181,8 @@ mod msfj_sis_scheduler_import_tests {
         let task = index_scheduler.queue.tasks.get_task(&rtxn, task_id).unwrap().unwrap();
         assert_eq!(task.status, Status::Failed);
         assert!(task.error.is_some());
-        // Use error_code() method
-        let error_code = task.error.as_ref().unwrap().error_code();
+        // Use direct field access for error_code
+        let error_code = task.error.as_ref().unwrap().error_code;
         // Depending on exact failure (non-existent vs outside dir), code might vary slightly
         assert!(matches!(error_code, meilisearch_types::error::Code::InvalidSnapshotPath | meilisearch_types::error::Code::SnapshotImportFailed));
     }
@@ -1215,8 +1214,8 @@ mod msfj_sis_scheduler_import_tests {
         let task = index_scheduler.queue.tasks.get_task(&rtxn, task_id).unwrap().unwrap();
         assert_eq!(task.status, Status::Failed);
         assert!(task.error.is_some());
-        // Use error_code() method
-        let error_code = task.error.as_ref().unwrap().error_code();
+        // Use direct field access for error_code
+        let error_code = task.error.as_ref().unwrap().error_code;
          // Expect SnapshotImportFailed wrapping the underlying format error
         assert_eq!(error_code, meilisearch_types::error::Code::SnapshotImportFailed);
     }
@@ -1272,8 +1271,8 @@ mod msfj_sis_scheduler_import_tests {
         let task = index_scheduler.queue.tasks.get_task(&rtxn, task_id).unwrap().unwrap();
         assert_eq!(task.status, Status::Failed);
         assert!(task.error.is_some());
-        // Use error_code() method
-        let error_code = task.error.as_ref().unwrap().error_code();
+        // Use direct field access for error_code
+        let error_code = task.error.as_ref().unwrap().error_code;
         assert_eq!(error_code, meilisearch_types::error::Code::SnapshotVersionMismatch);
     }
 }
