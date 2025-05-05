@@ -1533,7 +1533,8 @@ mod msfj_sis_scheduler_import_tests {
         // Corrected PrefixSearch construction (use IndexingTime variant)
         let prefix_search_value = PrefixSearch::IndexingTime;
         settings.set_prefix_search(prefix_search_value); // Use imported milli::index::PrefixSearch
-        // Removed incorrect set_facet_search call
+        // Set Facet Search correctly
+        settings.set_facet_search(true); // Set facet_search to true for this test
 
         // Keep embedders simple as tested elsewhere
         let mut embedders = BTreeMap::default();
@@ -1646,7 +1647,9 @@ mod msfj_sis_scheduler_import_tests {
         let expected_prefix_search = PrefixSearch::IndexingTime; // Use milli::index::PrefixSearch::IndexingTime
         assert_eq!(prefix_search, Some(expected_prefix_search)); // Getter returns Option
 
-        // Removed Facet Search assertion as it's not set/retrieved this way
+        // Verify Facet Search
+        let facet_search = imported_index.facet_search(&index_rtxn).unwrap();
+        assert_eq!(facet_search, Some(true)); // Check if facet_search is true
 
         // Verify Embedders (basic check)
         let imported_embedders = imported_index.embedding_configs(&index_rtxn).unwrap();
