@@ -1250,17 +1250,14 @@ mod msfj_sis_scheduler_import_tests {
                 format!("Failed to unpack snapshot '{}': {}", snapshot_path.display(), e)
             }).unwrap();
             // snapshot_file is dropped here
-        }
+        } // End of scope for snapshot_file
 
-
+        // This is the correct place for metadata_path definition
         let metadata_path = temp_extract_dir.path().join("metadata.json");
-            format!("Failed to unpack snapshot '{}': {}", snapshot_path.display(), e)
-        }).unwrap();
-
-
-        let metadata_path = temp_extract_dir.path().join("metadata.json");
+        // Read and modify metadata
         let mut metadata: serde_json::Value = serde_json::from_reader(std::fs::File::open(&metadata_path).unwrap()).unwrap(); // Use full path
         metadata["meilisearchVersion"] = serde_json::Value::String("0.99.0".to_string()); // Incompatible version
+        // Write modified metadata back
         let mut metadata_file = std::fs::File::create(&metadata_path).unwrap(); // Use full path
         serde_json::to_writer_pretty(&mut metadata_file, &metadata).unwrap();
         metadata_file.flush().unwrap(); // Ensure data is written before re-packing
