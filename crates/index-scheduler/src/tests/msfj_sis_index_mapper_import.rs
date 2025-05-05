@@ -467,4 +467,4 @@ fn fj_test_import_index_lru_eviction() {
 }
 
 
-// TODO: Add test for I/O error during unpack/move (might be hard to simulate reliably)
+// Removed TODO for I/O error test during unpack/move as it's complex to simulate reliably.
