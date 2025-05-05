@@ -1257,8 +1257,17 @@ mod msfj_sis_scheduler_import_tests {
         let new_snapshot_file = std::fs::File::create(&snapshot_path).unwrap(); // Use full path
         let enc = flate2::write::GzEncoder::new(new_snapshot_file, flate2::Compression::default());
         let mut tar_builder = tar::Builder::new(enc);
-        // Correct arguments: Add contents of current dir (".") relative to archive root (".")
-        tar_builder.append_dir_all(".", ".").unwrap();
+        // Iterate and add entries individually relative to the temp dir
+        for entry in walkdir::WalkDir::new(temp_extract_dir.path()).min_depth(1) {
+            let entry = entry.unwrap();
+            let path = entry.path();
+            let name = path.strip_prefix(temp_extract_dir.path()).unwrap();
+            if path.is_file() {
+                tar_builder.append_path_with_name(path, name).unwrap();
+            } else if path.is_dir() {
+                tar_builder.append_dir(name, path).unwrap();
+            }
+        }
         tar_builder.finish().unwrap();
         // Ensure the underlying file is flushed and closed
         let gz_encoder = tar_builder.into_inner().unwrap();
