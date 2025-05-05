@@ -1872,19 +1872,24 @@ mod msfj_sis_scheduler_e2e_tests {
             let batch_id = creation_task.batch_uid.expect("Creation task should have a batch UID");
             let batch: Batch =
                 index_scheduler.queue.batches.get_batch(&rtxn, batch_id).unwrap().expect("Creation batch not found");
-            let progress_steps: Vec<String> =
-                batch.stats.progress_trace.iter().map(|(name, _)| name.clone()).collect();
-            assert_eq!(
-                progress_steps,
-                vec![
-                    "processing tasks",
-                    "reading metadata",
-                    "copying index data",
-                    "packaging snapshot",
-                    "writing tasks to disk"
-                ],
-                "Progress trace mismatch for snapshot creation"
-            );
+           let progress_steps: Vec<String> =
+               batch.stats.progress_trace.iter().map(|(name, _)| name.clone()).collect();
+           // Update the expected steps to match the actual detailed trace
+           assert_eq!(
+               progress_steps,
+               vec![
+                   // Steps reported within process_single_index_snapshot_creation
+                   "processing tasks > reading metadata",
+                   "processing tasks > copying index data",
+                   "processing tasks > packaging snapshot",
+                   // Step reported by the outer process_batch loop after the function returns
+                   "processing tasks",
+                   // Steps reported during task finalization
+                   "writing tasks to disk > task", // Specific sub-step
+                   "writing tasks to disk"         // General step
+               ],
+               "Progress trace mismatch for snapshot creation"
+           );
         } // Read transaction dropped here
 
         // === Intermediate Check ===
@@ -1941,19 +1946,24 @@ mod msfj_sis_scheduler_e2e_tests {
             let batch_id = import_task.batch_uid.expect("Import task should have a batch UID");
             let batch: Batch =
                 index_scheduler.queue.batches.get_batch(&rtxn, batch_id).unwrap().expect("Import batch not found");
-            let progress_steps: Vec<String> =
-                batch.stats.progress_trace.iter().map(|(name, _)| name.clone()).collect();
-            assert_eq!(
-                progress_steps,
-                vec![
-                    "processing tasks",
-                    "validating snapshot",
-                    "unpacking snapshot",
-                    "applying settings",
-                    "writing tasks to disk"
-                ],
-                "Progress trace mismatch for snapshot import"
-            );
+           let progress_steps: Vec<String> =
+               batch.stats.progress_trace.iter().map(|(name, _)| name.clone()).collect();
+           // Update the expected steps to match the actual detailed trace
+           assert_eq!(
+               progress_steps,
+               vec![
+                   // Steps reported within fj_process_single_index_snapshot_import
+                   "processing tasks > validating snapshot",
+                   "processing tasks > unpacking snapshot",
+                   "processing tasks > applying settings",
+                   // Step reported by the outer process_batch loop after the function returns
+                   "processing tasks",
+                   // Steps reported during task finalization
+                   "writing tasks to disk > task", // Specific sub-step
+                   "writing tasks to disk"         // General step
+               ],
+               "Progress trace mismatch for snapshot import"
+           );
         } // Read transaction dropped here
 
         // === 5. Verify Indexes ===
