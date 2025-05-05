@@ -1835,20 +1835,19 @@ mod msfj_sis_scheduler_e2e_tests {
             );
             assert!(creation_task.error.is_none());
 
-            let snapshot_uid = match creation_task.details {
+            // Retrieve the (now full) snapshot_uid from the task details
+            let full_snapshot_uid = match creation_task.details {
                 Some(Details::SingleIndexSnapshotCreation { snapshot_uid: Some(uid) }) => uid,
                 _ => panic!("Snapshot UID not found in creation task details"),
             };
 
-            // Construct path based on convention: {index_uid}-{snapshot_uid}.snapshot.tar.gz
-            // Ensure we only use the UUID part from the potentially incorrect stored snapshot_uid.
-            let uuid_part = snapshot_uid.split('-').last().unwrap_or(&snapshot_uid); // Get part after last '-' or the whole string
-            let filename = format!("{}-{}.snapshot.tar.gz", S("source_e2e"), uuid_part); // Use literal index name and extracted UUID
+            // Construct the filename using the full UUID
+            let filename = format!("{}-{}.snapshot.tar.gz", S("source_e2e"), full_snapshot_uid);
             // Use the stable_snapshot_path configured earlier
             snapshot_path = stable_snapshot_path.join(filename); // Assign to outer scope variable
 
             // === Test Logging Step ===
-            tracing::info!(target: "snapshot_e2e_test", "Retrieved snapshot_uid from task: {}", snapshot_uid);
+            tracing::info!(target: "snapshot_e2e_test", "Retrieved full snapshot_uid from task: {}", full_snapshot_uid);
             tracing::info!(target: "snapshot_e2e_test", "Constructed expected snapshot path for assertion: {:?}", snapshot_path);
             // === End Test Logging Step ===
 

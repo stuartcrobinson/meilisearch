@@ -774,14 +774,14 @@ impl IndexScheduler {
                 // [meilisearchfj] Report progress after successful packaging
                 progress.update_progress(FjSingleIndexSnapshotCreationProgress::PackagingSnapshot);
 
-                // Extract ONLY the UUID part from the filename stem for the details
-                // Corrected logic: split stem by '.' first, then by '-'
+                // Extract the FULL UUID part from the filename stem for the details.
+                // Filename format: {index_uid}-{uuid}.snapshot.tar.gz
                 let snapshot_uid = snapshot_path
                     .file_stem() // Get "index_uid-uuid.snapshot.tar"
                     .and_then(|s| s.to_str())
                     .and_then(|stem| stem.split('.').next()) // Get "index_uid-uuid"
-                    .and_then(|name_part| name_part.split('-').last()) // Get "uuid"
-                    .map(|uid| uid.to_string()) // Convert to String
+                    .and_then(|name_part| name_part.split_once('-')) // Split into ("index_uid", "uuid")
+                    .map(|(_index, uuid)| uuid.to_string()) // Get the full UUID part
                     .unwrap_or_else(|| {
                         // Fallback if filename format is unexpected
                         tracing::warn!(
