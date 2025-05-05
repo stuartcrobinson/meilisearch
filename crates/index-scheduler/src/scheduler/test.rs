@@ -1660,8 +1660,7 @@ mod msfj_sis_scheduler_import_tests {
 mod msfj_sis_scheduler_e2e_tests {
     use super::*; // Bring parent module's imports into scope
     use crate::test_utils::{index_creation_task, replace_document_import_task, sample_documents};
-    use crate::IndexScheduler;
-    use super::super::Opt; // Import Opt using super::super
+    use crate::{IndexScheduler, Opt}; // Import Opt from crate root
     use big_s::S;
     use meilisearch_types::batches::Batch; // For progress trace verification
     use meilisearch_types::facet_values_sort::FacetValuesSort;
