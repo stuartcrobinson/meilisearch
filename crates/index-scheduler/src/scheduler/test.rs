@@ -1929,16 +1929,36 @@ mod msfj_sis_scheduler_e2e_tests {
             target_index.ranking_rules(&target_rtxn).unwrap(),
             "Ranking rules mismatch"
         );
-        assert_eq!(
-            source_index.stop_words(&source_rtxn).unwrap(),
-            target_index.stop_words(&target_rtxn).unwrap(),
-            "Stop words mismatch"
-        );
-        assert_eq!(
-            source_index.synonyms(&source_rtxn).unwrap(),
-            target_index.synonyms(&target_rtxn).unwrap(),
-            "Synonyms mismatch"
-        );
+        // Convert stop words FST set to BTreeSet for comparison
+        let source_stop_words: Option<BTreeSet<String>> = source_index.stop_words(&source_rtxn).unwrap().map(|fst| fst.stream().into_strs().unwrap().into_iter().collect());
+        let target_stop_words: Option<BTreeSet<String>> = target_index.stop_words(&target_rtxn).unwrap().map(|fst| fst.stream().into_strs().unwrap().into_iter().collect());
+        assert_eq!(source_stop_words, target_stop_words, "Stop words mismatch");
+
+        // Convert synonyms FST map to BTreeMap for comparison
+        let source_synonyms: Option<BTreeMap<String, Vec<String>>> = source_index.synonyms(&source_rtxn).unwrap().map(|fst| {
+            let mut map = BTreeMap::new();
+            let mut stream = fst.stream();
+            while let Some((key, value)) = stream.next() {
+                let key = String::from_utf8(key.to_vec()).unwrap();
+                let synonyms_fst = fst::Set::new(&fst.as_fst().nodes()[value as usize..]).unwrap();
+                let synonyms = synonyms_fst.stream().into_strs().unwrap();
+                map.insert(key, synonyms);
+            }
+            map
+        });
+         let target_synonyms: Option<BTreeMap<String, Vec<String>>> = target_index.synonyms(&target_rtxn).unwrap().map(|fst| {
+            let mut map = BTreeMap::new();
+            let mut stream = fst.stream();
+            while let Some((key, value)) = stream.next() {
+                let key = String::from_utf8(key.to_vec()).unwrap();
+                let synonyms_fst = fst::Set::new(&fst.as_fst().nodes()[value as usize..]).unwrap();
+                let synonyms = synonyms_fst.stream().into_strs().unwrap();
+                map.insert(key, synonyms);
+            }
+            map
+        });
+        assert_eq!(source_synonyms, target_synonyms, "Synonyms mismatch");
+
         assert_eq!(
             source_index.distinct_attribute(&source_rtxn).unwrap(),
             target_index.distinct_attribute(&target_rtxn).unwrap(),
@@ -1960,11 +1980,11 @@ mod msfj_sis_scheduler_e2e_tests {
             target_index.min_word_len_two_typos(&target_rtxn).unwrap(),
             "Min word len two typos mismatch"
         );
-        assert_eq!(
-            source_index.exact_words(&source_rtxn).unwrap(),
-            target_index.exact_words(&target_rtxn).unwrap(),
-            "Exact words mismatch"
-        );
+        // Convert exact words FST set to BTreeSet for comparison
+        let source_exact_words: Option<BTreeSet<String>> = source_index.exact_words(&source_rtxn).unwrap().map(|fst| fst.stream().into_strs().unwrap().into_iter().collect());
+        let target_exact_words: Option<BTreeSet<String>> = target_index.exact_words(&target_rtxn).unwrap().map(|fst| fst.stream().into_strs().unwrap().into_iter().collect());
+        assert_eq!(source_exact_words, target_exact_words, "Exact words mismatch");
+
         assert_eq!(
             source_index.exact_attributes(&source_rtxn).unwrap().into_iter().map(String::from).collect::<HashSet<String>>(), // Explicitly collect HashSet<String>
             target_index.exact_attributes(&target_rtxn).unwrap().into_iter().map(String::from).collect::<HashSet<String>>(), // Explicitly collect HashSet<String>
@@ -1976,11 +1996,10 @@ mod msfj_sis_scheduler_e2e_tests {
             target_index.max_values_per_facet(&target_rtxn).unwrap(),
             "Max values per facet mismatch"
         );
-        assert_eq!(
-            source_index.sort_facet_values_by(&source_rtxn).unwrap(),
-            target_index.sort_facet_values_by(&target_rtxn).unwrap(),
-            "Sort facet values by mismatch"
-        );
+        // Convert OrderByMap to BTreeMap<String, FacetValuesSort> for comparison
+        let source_sort_by: BTreeMap<String, FacetValuesSort> = source_index.sort_facet_values_by(&source_rtxn).unwrap().into_iter().map(|(k, v)| (k, v.into())).collect();
+        let target_sort_by: BTreeMap<String, FacetValuesSort> = target_index.sort_facet_values_by(&target_rtxn).unwrap().into_iter().map(|(k, v)| (k, v.into())).collect();
+        assert_eq!(source_sort_by, target_sort_by, "Sort facet values by mismatch");
         // Pagination
         assert_eq!(
             source_index.pagination_max_total_hits(&source_rtxn).unwrap(),
@@ -2005,22 +2024,18 @@ mod msfj_sis_scheduler_e2e_tests {
             target_index.localized_attributes_rules(&target_rtxn).unwrap(),
             "Localized attributes mismatch"
         );
-        // Tokenization (Compare Option<&BTreeSet<String>>)
-        assert_eq!(
-            source_index.separator_tokens(&source_rtxn).unwrap(),
-            target_index.separator_tokens(&target_rtxn).unwrap(),
-            "Separator tokens mismatch"
-        );
-        assert_eq!(
-            source_index.non_separator_tokens(&source_rtxn).unwrap(),
-            target_index.non_separator_tokens(&target_rtxn).unwrap(),
-            "Non-separator tokens mismatch"
-        );
-        assert_eq!(
-            source_index.dictionary(&source_rtxn).unwrap(),
-            target_index.dictionary(&target_rtxn).unwrap(),
-            "Dictionary mismatch"
-        );
+        // Tokenization (Convert FST sets to BTreeSet for comparison)
+        let source_separator_tokens: Option<BTreeSet<String>> = source_index.separator_tokens(&source_rtxn).unwrap().map(|fst| fst.stream().into_strs().unwrap().into_iter().collect());
+        let target_separator_tokens: Option<BTreeSet<String>> = target_index.separator_tokens(&target_rtxn).unwrap().map(|fst| fst.stream().into_strs().unwrap().into_iter().collect());
+        assert_eq!(source_separator_tokens, target_separator_tokens, "Separator tokens mismatch");
+
+        let source_non_separator_tokens: Option<BTreeSet<String>> = source_index.non_separator_tokens(&source_rtxn).unwrap().map(|fst| fst.stream().into_strs().unwrap().into_iter().collect());
+        let target_non_separator_tokens: Option<BTreeSet<String>> = target_index.non_separator_tokens(&target_rtxn).unwrap().map(|fst| fst.stream().into_strs().unwrap().into_iter().collect());
+        assert_eq!(source_non_separator_tokens, target_non_separator_tokens, "Non-separator tokens mismatch");
+
+        let source_dictionary: Option<BTreeSet<String>> = source_index.dictionary(&source_rtxn).unwrap().map(|fst| fst.stream().into_strs().unwrap().into_iter().collect());
+        let target_dictionary: Option<BTreeSet<String>> = target_index.dictionary(&target_rtxn).unwrap().map(|fst| fst.stream().into_strs().unwrap().into_iter().collect());
+        assert_eq!(source_dictionary, target_dictionary, "Dictionary mismatch");
         // Search Cutoff
         assert_eq!(
             source_index.search_cutoff(&source_rtxn).unwrap(),
