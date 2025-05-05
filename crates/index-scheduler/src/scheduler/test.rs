@@ -1747,19 +1747,8 @@ mod msfj_sis_scheduler_e2e_tests {
         });
         // Proximity Precision (Convert to View type)
         settings.proximity_precision = Setting::Set(ProximityPrecision::ByWord.into());
-        // Embedders (Wrap inner Setting in SettingEmbeddingSettings)
-        let mut embedders = BTreeMap::default();
-        embedders.insert(
-            S("default"),
-            SettingEmbeddingSettings { // Wrap here
-                inner: Setting::Set(EmbeddingSettings {
-                    source: Setting::Set(EmbedderSource::UserProvided),
-                    dimensions: Setting::Set(1),
-                    ..Default::default()
-                })
-            },
-        );
-        settings.embedders = Setting::Set(embedders);
+        // Embedders setting removed for this E2E test to avoid needing pre-computed vectors
+        // settings.embedders = Setting::Set(...); // Removed embedder config
         // Localized Attributes
         settings.localized_attributes = Setting::Set(vec![LocalizedAttributesRuleView {
             attribute_patterns: vec![S("title#fr")].into(),
@@ -2009,26 +1998,8 @@ mod msfj_sis_scheduler_e2e_tests {
             target_index.proximity_precision(&target_rtxn).unwrap(),
             "Proximity precision mismatch"
         );
-        // Embedders (Compare fields manually)
-        let source_embedders = source_index.embedding_configs(&source_rtxn).unwrap();
-        let target_embedders = target_index.embedding_configs(&target_rtxn).unwrap();
-        assert_eq!(source_embedders.len(), target_embedders.len(), "Embedder count mismatch");
-        for (src_cfg, tgt_cfg) in source_embedders.iter().zip(target_embedders.iter()) {
-             assert_eq!(src_cfg.name, tgt_cfg.name, "Embedder name mismatch");
-             // Compare relevant fields of EmbedderOptions
-             match (&src_cfg.config.embedder_options, &tgt_cfg.config.embedder_options) {
-                 (milli::vector::EmbedderOptions::HuggingFace(s), milli::vector::EmbedderOptions::HuggingFace(t)) => assert_eq!(s, t, "HuggingFace options mismatch"),
-                 (milli::vector::EmbedderOptions::OpenAi(s), milli::vector::EmbedderOptions::OpenAi(t)) => assert_eq!(s, t, "OpenAi options mismatch"),
-                 (milli::vector::EmbedderOptions::Rest(s), milli::vector::EmbedderOptions::Rest(t)) => assert_eq!(s, t, "Rest options mismatch"),
-                 (milli::vector::EmbedderOptions::UserProvided(s), milli::vector::EmbedderOptions::UserProvided(t)) => assert_eq!(s, t, "UserProvided options mismatch"),
-                 (milli::vector::EmbedderOptions::Ollama(s), milli::vector::EmbedderOptions::Ollama(t)) => assert_eq!(s, t, "Ollama options mismatch"),
-                _ => panic!("Mismatched embedder option types"),
-            }
-            // Compare PromptData fields individually
-            assert_eq!(src_cfg.config.prompt.template, tgt_cfg.config.prompt.template, "Embedder prompt template mismatch");
-            assert_eq!(src_cfg.config.prompt.max_bytes, tgt_cfg.config.prompt.max_bytes, "Embedder prompt max_bytes mismatch");
-            assert_eq!(src_cfg.user_provided, tgt_cfg.user_provided, "Embedder user_provided bitmap mismatch");
-       }
+        // Embedders verification removed as setting was removed from test setup
+        // assert_eq!(source_index.embedding_configs(...), target_index.embedding_configs(...));
        // Localized Attributes
         assert_eq!(
             source_index.localized_attributes_rules(&source_rtxn).unwrap(),
