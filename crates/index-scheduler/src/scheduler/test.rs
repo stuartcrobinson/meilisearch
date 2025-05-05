@@ -1242,13 +1242,13 @@ mod msfj_sis_scheduler_import_tests {
 
         // Modify the metadata.json within the snapshot to have a different version
         let temp_extract_dir = tempdir().unwrap();
-        { // Scope for file reading
-            // Add assertion to check if path is a file
-            assert!(snapshot_path.is_file(), "Snapshot path is not a file: {:?}", snapshot_path);
-            // Read the compressed data into memory first
-            let compressed_data = std::fs::read(&snapshot_path).unwrap();
-            let gz_decoder = flate2::read::GzDecoder::new(compressed_data.as_slice());
-            let mut archive = tar::Archive::new(gz_decoder);
+        // Check snapshot exists after creation
+        assert!(snapshot_path.is_file(), "Snapshot file missing after creation: {:?}", snapshot_path);
+
+        // Unpack the original snapshot
+        {
+            let snapshot_file = std::fs::File::open(&snapshot_path).unwrap();
+            let mut archive = tar::Archive::new(flate2::read::GzDecoder::new(snapshot_file));
             // Add explicit error mapping for unpack
             archive.unpack(temp_extract_dir.path()).map_err(|e| {
                 format!("Failed to unpack snapshot '{}': {}", snapshot_path.display(), e)
@@ -1264,12 +1264,14 @@ mod msfj_sis_scheduler_import_tests {
         // Write modified metadata back
         let mut metadata_file = std::fs::File::create(&metadata_path).unwrap(); // Use full path
         serde_json::to_writer_pretty(&mut metadata_file, &metadata).unwrap();
-        metadata_file.flush().unwrap(); // Ensure data is written before re-packing
+        metadata_file.flush().unwrap();
+        drop(metadata_file); // Explicitly close metadata file before repacking
 
         // Re-pack the snapshot
-        let new_snapshot_file = std::fs::File::create(&snapshot_path).unwrap(); // Use full path
-        let enc = flate2::write::GzEncoder::new(new_snapshot_file, flate2::Compression::default());
-        let mut tar_builder = tar::Builder::new(enc);
+        { // Scope for repacking file handles
+            let new_snapshot_file = std::fs::File::create(&snapshot_path).unwrap();
+            let enc = flate2::write::GzEncoder::new(new_snapshot_file, flate2::Compression::default());
+            let mut tar_builder = tar::Builder::new(enc);
         // Iterate and add entries individually relative to the temp dir
         for entry in walkdir::WalkDir::new(temp_extract_dir.path()).min_depth(1) {
             let entry = entry.unwrap();
@@ -1281,10 +1283,12 @@ mod msfj_sis_scheduler_import_tests {
                 tar_builder.append_dir(name, path).unwrap();
             }
         }
-        tar_builder.finish().unwrap();
-        // Ensure the underlying file is flushed and closed
-        let gz_encoder = tar_builder.into_inner().unwrap();
-        gz_encoder.finish().unwrap();
+            tar_builder.finish().unwrap();
+            // Ensure the underlying file is flushed and closed
+            let gz_encoder = tar_builder.into_inner().unwrap();
+            gz_encoder.finish().unwrap();
+            // new_snapshot_file and enc are dropped here
+        }
 
 
         // Register the import task
