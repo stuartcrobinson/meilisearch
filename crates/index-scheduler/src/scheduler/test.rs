@@ -15,8 +15,8 @@ use std::fs::File;
 
 use crate::insta_snapshot::snapshot_index_scheduler;
 use crate::test_utils::Breakpoint::*;
-// Use test_utils for TempIndex, handle_tasks import handled inside module
-use crate::test_utils::TempIndex; // Keep TempIndex import here
+// Use test_utils for handle_tasks and TempIndex, import handled inside module
+// Removed TempIndex import from here
 use crate::test_utils::{
     index_creation_task, read_json, replace_document_import_task, sample_documents,
 };
@@ -942,8 +942,8 @@ fn create_and_list_index() {
 mod msfj_sis_scheduler_import_tests {
     use super::*; // Keep import from parent
     // Move necessary imports inside the module
-    // Try compiler suggested path for handle_tasks
-    use crate::scheduler::test::handle_tasks;
+    // Revert handle_tasks to test_utils path, add TempIndex here
+    use crate::test_utils::{handle_tasks, TempIndex};
     use meilisearch_types::milli::vector::settings::{EmbedderSource, EmbeddingSettings};
     // Removed unused import: SettingEmbeddingSettings
     use meilisearch_types::tasks::KindWithContent;
@@ -951,15 +951,15 @@ mod msfj_sis_scheduler_import_tests {
     use std::collections::BTreeMap;
     use big_s::S;
     use std::path::PathBuf;
-    use std::fs::File; // Keep File import as it's used in test_import_snapshot_invalid_format and test_import_snapshot_version_mismatch
+    // Removed unused File import
     use std::io::Write;
     use crate::{IndexScheduler, fj_snapshot_utils};
     use crate::test_utils::index_creation_task;
     use meilisearch_types::tasks::{Details, Status};
     use milli::FilterableAttributesRule;
     use milli::update::Setting;
-    // Removed unused ErrorCode import
-    use actix_web::http::StatusCode; // Import StatusCode for error checking
+    // Try importing StatusCode via meilisearch_types::error
+    use meilisearch_types::error::StatusCode;
 
     // Helper to create a valid snapshot for import tests
     // Moved inside the module
@@ -1198,7 +1198,7 @@ mod msfj_sis_scheduler_import_tests {
         let invalid_snapshot_path = snapshot_dir.join("invalid_format.snapshot.tar.gz");
 
         // Create an empty file as an invalid snapshot
-        File::create(&invalid_snapshot_path).unwrap();
+        std::fs::File::create(&invalid_snapshot_path).unwrap(); // Use full path since import removed
 
         // Register the import task
         let import_task = KindWithContent::SingleIndexSnapshotImport {
@@ -1235,19 +1235,19 @@ mod msfj_sis_scheduler_import_tests {
 
         // Modify the metadata.json within the snapshot to have a different version
         let temp_extract_dir = tempdir().unwrap();
-        let snapshot_file = File::open(&snapshot_path).unwrap();
+        let snapshot_file = std::fs::File::open(&snapshot_path).unwrap(); // Use full path
         let mut archive = tar::Archive::new(flate2::read::GzDecoder::new(snapshot_file));
         archive.unpack(temp_extract_dir.path()).unwrap();
 
         let metadata_path = temp_extract_dir.path().join("metadata.json");
-        let mut metadata: serde_json::Value = serde_json::from_reader(File::open(&metadata_path).unwrap()).unwrap();
+        let mut metadata: serde_json::Value = serde_json::from_reader(std::fs::File::open(&metadata_path).unwrap()).unwrap(); // Use full path
         metadata["meilisearchVersion"] = serde_json::Value::String("0.99.0".to_string()); // Incompatible version
-        let mut metadata_file = File::create(&metadata_path).unwrap();
+        let mut metadata_file = std::fs::File::create(&metadata_path).unwrap(); // Use full path
         serde_json::to_writer_pretty(&mut metadata_file, &metadata).unwrap();
         metadata_file.flush().unwrap(); // Ensure data is written before re-packing
 
         // Re-pack the snapshot
-        let new_snapshot_file = File::create(&snapshot_path).unwrap();
+        let new_snapshot_file = std::fs::File::create(&snapshot_path).unwrap(); // Use full path
         let enc = flate2::write::GzEncoder::new(new_snapshot_file, flate2::Compression::default());
         let mut tar_builder = tar::Builder::new(enc);
         tar_builder.append_dir_all(".", temp_extract_dir.path()).unwrap();
