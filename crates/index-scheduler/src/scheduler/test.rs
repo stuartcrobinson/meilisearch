@@ -1836,10 +1836,28 @@ mod msfj_sis_scheduler_e2e_tests {
                     tracing::info!(target: "snapshot_e2e_test", "Snapshot file found after {} retries.", i);
                     break;
                 }
-                // Add more detailed logging on failure
+                // === Detailed Diagnostics Inside Loop ===
                 let file_exists = snapshot_path.exists();
                 let parent_exists = parent_dir.exists();
-                tracing::warn!(target: "snapshot_e2e_test", "Snapshot file not found on attempt {}. is_file: false, exists: {}, parent_exists: {}. Retrying...", i, file_exists, parent_exists);
+                let parent_perms = parent_dir.metadata().map(|m| m.permissions()).ok(); // Get parent permissions if possible
+                let parent_contents: Option<Vec<String>> = parent_dir.read_dir().map(|read_dir| {
+                    read_dir
+                        .filter_map(|entry| entry.ok())
+                        .map(|entry| entry.file_name().to_string_lossy().into_owned())
+                        .collect()
+                }).ok(); // List parent directory contents if possible
+
+                tracing::warn!(
+                    target: "snapshot_e2e_test",
+                    "Snapshot file not found on attempt {}. Path: {:?}, is_file: false, exists: {}, parent_exists: {}, parent_perms: {:?}, parent_contents: {:?}. Retrying...",
+                    i,
+                    snapshot_path, // Log path again inside loop
+                    file_exists,
+                    parent_exists,
+                    parent_perms,
+                    parent_contents
+                );
+                // === End Detailed Diagnostics ===
                 std::thread::sleep(std::time::Duration::from_millis(100)); // Wait 100ms
             }
             assert!(found, "Snapshot file not found at expected path after retries: {:?}", snapshot_path);
