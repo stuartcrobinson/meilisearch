@@ -986,8 +986,23 @@ mod msfj_sis_scheduler_import_tests {
 
         // 2. Create the snapshot using the internal utility function
         let snapshot_dir = index_scheduler.fj_snapshots_path();
-        std::fs::create_dir_all(snapshot_dir).unwrap();
+        // Verify snapshot directory exists and is writable
+        if !snapshot_dir.exists() {
+            std::fs::create_dir_all(&snapshot_dir).unwrap_or_else(|e| {
+                panic!("Failed to create snapshot directory {:?}: {}", snapshot_dir, e);
+            });
+        }
+        // Basic writability check (create and delete a temp file)
+        let test_write_path = snapshot_dir.join(".write_test");
+        std::fs::File::create(&test_write_path).and_then(|_| std::fs::remove_file(&test_write_path))
+            .unwrap_or_else(|e| {
+                panic!("Snapshot directory {:?} is not writable: {}", snapshot_dir, e);
+            });
+
         let snapshot_path = snapshot_dir.join(target_snapshot_name);
+
+        // Log the path just before creation
+        tracing::info!(target: "test::snapshot", "Attempting to create snapshot at: {:?}", snapshot_path);
 
         let index_rtxn = index.read_txn().unwrap();
         let metadata = fj_snapshot_utils::read_metadata_inner(source_index_uid, &index, &index_rtxn).unwrap();
