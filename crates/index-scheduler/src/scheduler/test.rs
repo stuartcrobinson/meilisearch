@@ -1465,8 +1465,8 @@ mod msfj_sis_scheduler_import_tests {
         // Let's try importing the parent and see what the compiler suggests for facet
         // use meilisearch_types::settings; // Keep this commented unless needed
 
-        // Corrected facet import path - They are in facet_values_sort module
-        use meilisearch_types::facet_values_sort::{FacetSearchSettings, OrderByType};
+        // Corrected facet import path - Guessing top-level
+        use meilisearch_types::{FacetSearchSettings, OrderByType};
         // Removed unused: PrefixSearchSettings, FacetingSettings, MinWordSizeForTypos, PaginationSettings, TypoToleranceSettings
         use milli::index::PrefixSearch; // Correct path
         use milli::proximity::ProximityPrecision; // Correct path
