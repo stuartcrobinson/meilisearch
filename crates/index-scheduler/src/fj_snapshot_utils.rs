@@ -198,7 +198,6 @@ pub fn create_index_snapshot(
     //     }
     //     Err(e) => {
     //          tracing::warn!(target: "snapshot_creation", "Failed to re-open snapshot file {:?} for sync_data: {}", snapshot_filepath, e);
-             tracing::warn!(target: "snapshot_creation", "Failed to re-open snapshot file {:?} for sync_data: {}", snapshot_filepath, e);
              // Continue anyway
         }
     }
