@@ -1005,7 +1005,11 @@ mod msfj_sis_scheduler_import_tests {
         tracing::info!(target: "test::snapshot", "Attempting to create snapshot at: {:?}", snapshot_path);
 
         let index_rtxn = index.read_txn().unwrap();
-        let metadata = fj_snapshot_utils::read_metadata_inner(source_index_uid, &index, &index_rtxn).unwrap();
+        // Handle potential error from reading metadata
+        let metadata = fj_snapshot_utils::read_metadata_inner(source_index_uid, &index, &index_rtxn)
+            .unwrap_or_else(|e| {
+                panic!("Failed to read metadata for index '{}' before snapshot creation: {}", source_index_uid, e);
+            });
         drop(index_rtxn); // Drop txn before copying
 
         // Use the correct function name and capture the result
