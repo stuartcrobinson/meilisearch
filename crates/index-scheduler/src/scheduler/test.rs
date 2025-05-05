@@ -1008,8 +1008,8 @@ mod msfj_sis_scheduler_import_tests {
         let metadata = fj_snapshot_utils::read_metadata_inner(source_index_uid, &index, &index_rtxn).unwrap();
         drop(index_rtxn); // Drop txn before copying
 
-        // Use the correct function name
-        fj_snapshot_utils::create_index_snapshot(
+        // Use the correct function name and capture the result
+        let creation_result = fj_snapshot_utils::create_index_snapshot(
             source_index_uid, // Pass index_uid as first argument
             &index,
             metadata,
