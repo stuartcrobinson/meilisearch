@@ -1240,10 +1240,11 @@ mod msfj_sis_scheduler_import_tests {
         let snapshot_path =
             create_test_snapshot(&index_scheduler, &mut handle, source_index, &snapshot_filename); // Pass handle
 
+        // Check snapshot exists *after* creation
+        assert!(snapshot_path.is_file(), "Snapshot file missing after creation: {:?}", snapshot_path);
+
         // Modify the metadata.json within the snapshot to have a different version
         let temp_extract_dir = tempdir().unwrap();
-        // Check snapshot exists after creation
-        assert!(snapshot_path.is_file(), "Snapshot file missing after creation: {:?}", snapshot_path);
 
         // Unpack the original snapshot
         {
