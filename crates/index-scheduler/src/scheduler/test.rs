@@ -1581,19 +1581,18 @@ mod msfj_sis_scheduler_import_tests {
         assert_eq!(typo_tolerance.disable_on_words, BTreeSet::from(["exact".to_string()]));
         assert_eq!(typo_tolerance.disable_on_attributes, HashSet::from(["exact_attr".to_string()]));
 
-        // Verify Faceting
-        let faceting = imported_index.faceting(&index_rtxn).unwrap();
-        assert_eq!(faceting.max_values_per_facet, 50);
+        // Verify Faceting (using individual getters)
+        assert_eq!(imported_index.max_values_per_facet(&index_rtxn).unwrap(), Some(50));
+        // Define expected using the correct type from meilisearch_types
         let expected_sort_by: BTreeMap<String, OrderByType> =
             BTreeMap::from([("size".to_string(), OrderByType::Desc)]);
-        // DIAGNOSE: dbg! the method call itself
-        let faceting = dbg!(imported_index.faceting(&index_rtxn)).unwrap();
-        assert_eq!(faceting.sort_facet_values_by, expected_sort_by);
+        // Convert milli::OrderByMap to BTreeMap<String, meilisearch_types::settings::OrderByType> for comparison
+        let actual_sort_by: BTreeMap<String, OrderByType> = imported_index.sort_facet_values_by(&index_rtxn).unwrap().into_iter().map(|(k, v)| (k, v.into())).collect();
+        assert_eq!(actual_sort_by, expected_sort_by);
 
-        // Verify Pagination
-        // DIAGNOSE: dbg! the method call itself
-        let pagination = dbg!(imported_index.pagination(&index_rtxn)).unwrap();
-        assert_eq!(pagination.max_total_hits, 500);
+
+        // Verify Pagination (using individual getter)
+        assert_eq!(imported_index.pagination_max_total_hits(&index_rtxn).unwrap(), Some(500));
 
         // Verify Proximity Precision
         // DIAGNOSE: Check the return type of proximity_precision
