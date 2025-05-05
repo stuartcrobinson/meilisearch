@@ -1160,12 +1160,23 @@ mod msfj_sis_scheduler_import_tests {
         // to handle setting embedders *before* snapshotting.
         // For now, we'll remove the direct setting application here.
 
-        // let index = index_scheduler.index(source_index).unwrap();
-        // let mut wtxn = index.write_txn().unwrap();
+        // Re-introduce getting the source index handle and wtxn *before* snapshotting
+        // Note: create_test_snapshot will handle the initial index creation if needed.
+        // We need to ensure the index exists *before* trying to apply settings.
+        // Let's create the index first, then apply settings, then snapshot.
+
+        // 1. Ensure source index exists (can use index_creation_task + advance)
+        let creation_task = index_creation_task(source_index, Some("id"));
+        let _creation_task_id = index_scheduler.register(creation_task, None, false).unwrap().uid;
+        handle.advance_one_successful_batch(); // Process index creation
+
+        // 2. Get handle and apply settings to the source index
+        let index = index_scheduler.index(source_index).unwrap();
+        let mut wtxn = index.write_txn().unwrap();
         let mut settings = milli::update::Settings::new(
-            &mut wtxn,
-            &index,
-            index_scheduler.indexer_config(),
+            &mut wtxn, // Now wtxn is defined
+            &index,  // Now index is defined
+            index_scheduler.indexer_config(), // index_scheduler is available
         );
         let mut embedders = BTreeMap::default();
         embedders.insert(S("default"), Setting::Set(EmbeddingSettings {
@@ -1173,17 +1184,16 @@ mod msfj_sis_scheduler_import_tests {
             dimensions: Setting::Set(1),
             ..Default::default()
         }));
-        // settings.set_embedder_settings(embedders); // Settings applied during snapshot creation setup
-        // settings.execute(|_| {}, || false).unwrap();
-        // wtxn.commit().unwrap();
+        settings.set_embedder_settings(embedders); // Apply the embedder settings
+        settings.execute(|_| {}, || false).unwrap(); // Execute settings update
+        wtxn.commit().unwrap(); // Commit the settings transaction
 
-        // 2. Create the snapshot (which now includes the embedder settings)
-        // We need a way to pass settings into create_test_snapshot or use a dedicated helper.
-        // For now, let's assume create_test_snapshot handles it based on index name or similar.
+        // 3. Create the snapshot (now that settings are applied)
+        // create_test_snapshot will use the existing index with applied settings.
         let snapshot_path =
-            create_test_snapshot(&index_scheduler, &mut handle, source_index); // This call creates the index AND the snapshot
+            create_test_snapshot(&index_scheduler, &mut handle, source_index); // This call snapshots the existing index
 
-        // 3. Register the import task
+        // 4. Register the import task
         let import_task = KindWithContent::SingleIndexSnapshotImport {
             source_snapshot_path: snapshot_path.to_str().unwrap().to_string(),
             target_index_uid: target_index.to_string(),
