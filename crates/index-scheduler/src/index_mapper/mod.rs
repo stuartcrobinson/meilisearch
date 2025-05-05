@@ -637,13 +637,18 @@ impl IndexMapper {
             return Err(Error::InvalidSnapshotPath { path: snapshot_path.to_path_buf() });
         }
 
+        tracing::trace!(target: "snapshot_import", "Snapshot path validated.");
         // Check if target_index_uid already exists
+        tracing::trace!(target: "snapshot_import", "Checking if target index '{}' exists...", target_index_uid);
         // [meilisearchfj] Use self.env for transaction
         let rtxn = self.env.read_txn()?;
         if self.index_exists(&rtxn, target_index_uid)? {
+            tracing::error!(target: "snapshot_import", "Target index '{}' already exists.", target_index_uid);
             return Err(Error::SnapshotImportTargetIndexExists {
                 target_index_uid: target_index_uid.to_string(),
             });
+        }
+        tracing::trace!(target: "snapshot_import", "Target index '{}' does not exist.", target_index_uid);
         }
         drop(rtxn); // Release read transaction before potential writes
 
