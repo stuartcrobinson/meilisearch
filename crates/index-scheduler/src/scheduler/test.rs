@@ -1140,7 +1140,7 @@ mod msfj_sis_scheduler_import_tests {
         let (index_scheduler, mut handle) = IndexScheduler::test(true, vec![]);
         let source_index = "source_index_import_embed";
         let target_index = "target_index_import_embed";
-        let snapshot_filename = format!("{}-test.snapshot.tar.gz", source_index);
+        // let snapshot_filename = format!("{}-test.snapshot.tar.gz", source_index); // Remove unused variable
 
         // 1. Create source index and add settings including embedders
         let task = index_creation_task(source_index, Some("id"));

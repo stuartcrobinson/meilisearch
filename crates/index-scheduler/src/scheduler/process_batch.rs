@@ -726,7 +726,7 @@ impl IndexScheduler {
         // progress.update_progress(SingleIndexSnapshotCreationProgress::Starting);
 
         // Expect PathBuf from the closure now
-        let snapshot_result: Result<PathBuf, Error> = (|| {
+        let snapshot_result: Result<PathBuf, Error> = (|| -> Result<PathBuf> { // Explicitly define closure return type
             // Get the index handle using the main scheduler env
             let index = {
                 let rtxn = self.env.read_txn()?;
@@ -746,7 +746,8 @@ impl IndexScheduler {
                 .set_currently_updating_index(Some((index_uid.clone(), index.clone())));
 
             // Call the core snapshot creation logic with correct arguments
-            let snapshot_uid = fj_snapshot_utils::create_index_snapshot(
+            // This is now the final expression of the closure
+            fj_snapshot_utils::create_index_snapshot(
                 index_uid.as_str(),
                 &index,
                 metadata, // Pass the read metadata
@@ -757,7 +758,6 @@ impl IndexScheduler {
                 index_uid: index_uid.clone(),
                 source: Box::new(e),
             })
-            // No semicolon here, the result of create_index_snapshot is the closure's return value
         })();
 
         // Always release the lock, regardless of success or failure
