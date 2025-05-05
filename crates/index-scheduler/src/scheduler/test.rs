@@ -1696,7 +1696,8 @@ mod msfj_sis_scheduler_e2e_tests {
         // Add documents using literal
         let (file, documents_count) = sample_documents(&index_scheduler, 0, 10); // 10 documents
         file.persist().unwrap();
-        let task = replace_document_import_task(S("source_e2e"), Some("id"), 0, documents_count);
+        // Borrow the String from S() to get &str
+        let task = replace_document_import_task(&S("source_e2e"), Some("id"), 0, documents_count);
         let _task_id = index_scheduler.register(task, None, false).unwrap().uid;
         handle.advance_one_successful_batch();
 
@@ -1903,8 +1904,8 @@ mod msfj_sis_scheduler_e2e_tests {
         } // Read transaction dropped here
 
         // === 5. Verify Indexes ===
-        // Get indexes using literals
-        let source_index = index_scheduler.index(S("source_e2e")).unwrap();
+        // Get indexes using literals, borrowing the String from S() to get &str
+        let source_index = index_scheduler.index(&S("source_e2e")).unwrap();
         let target_index = index_scheduler.index(&target_index_uid).unwrap();
 
         let source_rtxn = source_index.read_txn().unwrap();
