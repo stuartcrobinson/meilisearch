@@ -947,15 +947,25 @@ impl IndexScheduler {
         // 3. Update task status *and* determine the function's return value
         match import_and_settings_result {
             Ok(_) => { // Import and settings succeeded
+                // Correctly extract only the UUID part from the source snapshot path filename stem
                 let source_snapshot_uid = PathBuf::from(&source_snapshot_path)
-                    .file_stem()
+                    .file_stem() // Get "index_uid-uuid.snapshot.tar"
                     .and_then(|s| s.to_str())
-                    .map(|s| s.split_once('-').map(|(_, uid)| uid).unwrap_or(s))
-                    .unwrap_or(&source_snapshot_path)
-                    .to_string();
+                    .and_then(|stem| stem.split('.').next()) // Get "index_uid-uuid"
+                    .and_then(|name_part| name_part.split_once('-')) // Split into ("index_uid", "uuid")
+                    .map(|(_index, uuid)| uuid.to_string()) // Get the full UUID part
+                    .unwrap_or_else(|| {
+                        // Fallback if filename format is unexpected
+                        tracing::warn!(
+                            "Could not extract snapshot UUID from source filename stem: {:?}",
+                            PathBuf::from(&source_snapshot_path).file_stem()
+                        );
+                        "unknown".to_string() // Or use the full stem as a fallback? Let's stick to unknown for now.
+                    });
+
 
                 task.details = Some(Details::SingleIndexSnapshotImport {
-                    source_snapshot_uid,
+                    source_snapshot_uid, // Store the extracted UUID
                     target_index_uid,
                 });
                 task.status = Status::Succeeded;

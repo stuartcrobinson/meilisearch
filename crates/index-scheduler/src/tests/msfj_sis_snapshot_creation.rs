@@ -84,19 +84,16 @@ mod msfj_sis_snapshot_creation_tests {
         let index_for_snapshot = handle.index(index_uid).unwrap(); // Use a distinct variable name
 
         // Call the function under test, passing the fresh index handle and the pre-read metadata
-        let snapshot_uid = create_index_snapshot(index_uid, &index_for_snapshot, metadata.clone(), snapshots_path).unwrap();
+        // The function now returns the full PathBuf
+        let snapshot_filepath = create_index_snapshot(index_uid, &index_for_snapshot, metadata.clone(), snapshots_path).unwrap();
         // === End of restored section ===
 
 
         // === Restore snapshot verification ===
-        // Verify the snapshot file exists and has the correct name format
-        // Use snapshot_uid.display() for formatting
-        let expected_filename = format!("{}-{}.snapshot.tar.gz", index_uid, snapshot_uid.display());
-        // let snapshot_filepath = snapshots_path.join(&expected_filename);
-        let snapshot_filepath = snapshots_path.join(&expected_filename);
+        // Verify the snapshot file exists using the returned path directly
         assert!(snapshot_filepath.exists(), "Snapshot file was not created at {:?}", snapshot_filepath);
 
-        // Unpack the snapshot and verify its contents
+        // Unpack the snapshot and verify its contents using the returned path
         let snapshot_file = File::open(&snapshot_filepath).unwrap();
         let tar_gz = GzDecoder::new(snapshot_file);
         let mut archive = Archive::new(tar_gz);
