@@ -808,13 +808,11 @@ impl IndexScheduler {
             let snapshot_path = PathBuf::from(&source_snapshot_path);
 
             // 1. Call IndexMapper to import the index data
+            // Preserve the original error type from IndexMapper
             let (imported_index, parsed_metadata) = self
                 .index_mapper
-                .fj_import_index_from_snapshot(&target_index_uid, &snapshot_path)
-                .map_err(|e| Error::SnapshotImportFailed {
-                    target_index_uid: target_index_uid.clone(),
-                    source: Box::new(e),
-                })?;
+                .fj_import_index_from_snapshot(&target_index_uid, &snapshot_path)?;
+                // Removed the map_err that wrapped all errors as SnapshotImportFailed
 
             // 2. Apply settings from the snapshot metadata
             let mut index_wtxn = imported_index.write_txn().map_err(|e| {

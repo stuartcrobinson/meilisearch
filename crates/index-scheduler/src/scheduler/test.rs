@@ -1002,6 +1002,9 @@ mod msfj_sis_scheduler_import_tests {
         )
         .unwrap();
 
+        // Add assertion here to check immediately after creation
+        assert!(snapshot_path.is_file(), "Snapshot file missing immediately after creation call: {:?}", snapshot_path);
+
         snapshot_path
     }
 
