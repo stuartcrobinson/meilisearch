@@ -50,6 +50,10 @@ pub(crate) enum Batch {
     UpgradeDatabase {
         tasks: Vec<Task>,
     },
+    // [meilisearchfj] Added for single index snapshot
+    SingleIndexSnapshotCreation {
+        task: Task,
+    },
 }
 
 #[derive(Debug)]
@@ -131,6 +135,10 @@ impl Batch {
             Batch::IndexSwap { task } => {
                 RoaringBitmap::from_sorted_iter(std::iter::once(task.uid)).unwrap()
             }
+            // [meilisearchfj] Added for single index snapshot
+            Batch::SingleIndexSnapshotCreation { task } => {
+                RoaringBitmap::from_sorted_iter(std::iter::once(task.uid)).unwrap()
+            }
         }
     }
 
@@ -148,6 +156,8 @@ impl Batch {
             IndexCreation { index_uid, .. }
             | IndexUpdate { index_uid, .. }
             | IndexDeletion { index_uid, .. } => Some(index_uid),
+            // [meilisearchfj] Added for single index snapshot
+            Batch::SingleIndexSnapshotCreation { task } => task.indexes().first().copied(),
         }
     }
 }
@@ -168,6 +178,8 @@ impl fmt::Display for Batch {
             Batch::IndexDeletion { .. } => f.write_str("IndexDeletion")?,
             Batch::IndexSwap { .. } => f.write_str("IndexSwap")?,
             Batch::UpgradeDatabase { .. } => f.write_str("UpgradeDatabase")?,
+            // [meilisearchfj] Added for single index snapshot
+            Batch::SingleIndexSnapshotCreation { .. } => f.write_str("SingleIndexSnapshotCreation")?,
         };
         match index_uid {
             Some(name) => f.write_fmt(format_args!(" on {name:?} from tasks: {tasks:?}")),
@@ -505,7 +517,24 @@ impl IndexScheduler {
             return Ok(Some((Batch::Dump(task), current_batch)));
         }
 
-        // 5. We make a batch from the unprioritised tasks. Start by taking the next enqueued task.
+        // 5. [meilisearchfj] we batch the single index snapshots.
+        let to_snapshot =
+            self.queue.tasks.get_kind(rtxn, Kind::SingleIndexSnapshotCreation)? & enqueued;
+        if let Some(to_snapshot) = to_snapshot.min() {
+            let mut task = self
+                .queue
+                .tasks
+                .get_task(rtxn, to_snapshot)?
+                .ok_or(Error::CorruptedTaskQueue)?;
+            current_batch.processing(Some(&mut task));
+            current_batch.reason(BatchStopReason::TaskCannotBeBatched {
+                kind: Kind::SingleIndexSnapshotCreation,
+                id: task.uid,
+            });
+            return Ok(Some((Batch::SingleIndexSnapshotCreation { task }, current_batch)));
+        }
+
+        // 6. We make a batch from the unprioritised tasks. Start by taking the next enqueued task.
         let task_id = if let Some(task_id) = enqueued.min() { task_id } else { return Ok(None) };
         let mut task =
             self.queue.tasks.get_task(rtxn, task_id)?.ok_or(Error::CorruptedTaskQueue)?;

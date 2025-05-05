@@ -55,3 +55,4 @@ crossbeam-channel = "0.5.15"
 insta = { version = "=1.39.0", features = ["json", "redactions"] }
 maplit = "1.0.2"
 meili-snap = { path = "../meili-snap" }
+tokio = { version = "1.39.2", features = ["rt", "macros"] } # Add tokio dev dependency

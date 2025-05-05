@@ -284,6 +284,36 @@ impl Drop for IndexSchedulerHandle {
 impl IndexSchedulerHandle {
     // Delegate methods needed by tests to the internal index_scheduler
 
+    /// Gets the task information directly using a read transaction.
+    #[allow(dead_code)] // Used in tests
+    pub(crate) fn get_task(&self, task_id: u32) -> crate::Result<Option<meilisearch_types::tasks::Task>> { // Use crate::Result
+        // Fix: Use a read transaction to access the task queue
+        let rtxn = self.index_scheduler.read_txn()?;
+        self.index_scheduler.queue.tasks.get_task(&rtxn, task_id)
+    }
+
+    /// Creates an update file with the given JSON content.
+    /// Returns the UUID of the file and the number of documents.
+    #[allow(dead_code)] // Used in tests
+    pub(crate) fn create_update_file(
+        &self,
+        content: serde_json::Value,
+    ) -> crate::Result<(Uuid, u64)> { // Use crate::Result
+        let (content_uuid, mut content_file) =
+            self.index_scheduler.queue.file_store.new_update()?;
+        let documents_count =
+            read_json(content.to_string().as_bytes(), &mut content_file)?;
+        content_file.persist()?;
+        Ok((content_uuid, documents_count))
+    }
+
+    /// Returns the configured path for snapshots.
+    #[allow(dead_code)] // Used in tests
+    pub(crate) fn snapshots_path(&self) -> &std::path::Path {
+        &self.index_scheduler.scheduler.snapshots_path
+    }
+
+
     #[allow(dead_code)] // Used in tests
     pub(crate) async fn register_task(&mut self, task: KindWithContent) -> crate::Result<u32> {
         // Use the correct register method with default arguments for tests

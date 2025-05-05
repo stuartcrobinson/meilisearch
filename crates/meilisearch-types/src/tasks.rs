@@ -751,12 +751,12 @@ impl Details {
             Self::ClearAll { deleted_documents } => *deleted_documents = Some(0),
             Self::TaskCancelation { canceled_tasks, .. } => *canceled_tasks = Some(0),
             Self::TaskDeletion { deleted_tasks, .. } => *deleted_tasks = Some(0),
+            Self::SingleIndexSnapshotCreation { snapshot_uid } => *snapshot_uid = None,
             Self::SettingsUpdate { .. }
             | Self::IndexInfo { .. }
             | Self::Dump { .. }
             | Self::UpgradeDatabase { .. }
             | Self::IndexSwap { .. }
-            | Self::SingleIndexSnapshotCreation { .. }
             | Self::SingleIndexSnapshotImport { .. } => (),
         }
 

@@ -16,6 +16,8 @@ use crate::processing::{
     InnerSwappingTwoIndexes, SwappingTheIndexes, TaskCancelationProgress, TaskDeletionProgress,
     UpdateIndexProgress,
 };
+use crate::fj_snapshot_utils::{self, read_metadata_inner}; // [meilisearchfj] Import snapshot utilities and metadata reader
+// Duplicate import block removed
 use crate::utils::{
     self, remove_n_tasks_datetime_earlier_than, remove_task_datetime, swap_index_uid_in_task,
     ProcessingBatch,
@@ -349,6 +351,9 @@ impl IndexScheduler {
                 task.status = Status::Succeeded;
                 Ok((vec![task], ProcessBatchInfo::default()))
             }
+            Batch::SingleIndexSnapshotCreation { task } => self // Remove `mut`
+                .process_single_index_snapshot_creation(progress, task)
+                .map(|task| (vec![task], ProcessBatchInfo::default())),
             Batch::UpgradeDatabase { mut tasks } => {
                 let KindWithContent::UpgradeDatabase { from } = tasks.last().unwrap().kind else {
                     unreachable!();
@@ -683,5 +688,90 @@ impl IndexScheduler {
         }
 
         Ok(tasks)
+    }
+
+    /// Processes a `SingleIndexSnapshotCreation` task.
+    #[tracing::instrument(level = "trace", skip(self, _progress, task), target = "indexing::scheduler")] // Prefix progress with _
+    fn process_single_index_snapshot_creation(
+        &self,
+        _progress: Progress, // Prefix progress with _
+        mut task: Task,
+    ) -> Result<Task> {
+        let index_uid = match &task.kind {
+            KindWithContent::SingleIndexSnapshotCreation { index_uid } => index_uid.clone(),
+            _ => unreachable!("Invalid task kind passed to process_single_index_snapshot_creation"),
+        };
+
+        // TODO: Add specific progress steps for snapshot creation if needed (Step 7)
+        // progress.update_progress(SingleIndexSnapshotCreationProgress::Starting);
+
+        let snapshot_result: Result<String, Error> = (|| {
+            // Get the index handle using the main scheduler env
+            let index = {
+                let rtxn = self.env.read_txn()?;
+                self.index_mapper.index(&rtxn, &index_uid)?
+                // rtxn is dropped here
+            };
+
+            // Read metadata using a transaction from the *index's* environment
+            let metadata = {
+                let index_rtxn = index.read_txn().map_err(|e| Error::from_milli(e.into(), Some(index_uid.clone())))?; // Added .into()
+                read_metadata_inner(&index_uid, &index, &index_rtxn)?
+                // index_rtxn is dropped here
+            };
+
+            // Lock the index for writing *after* reading metadata
+            self.index_mapper
+                .set_currently_updating_index(Some((index_uid.clone(), index.clone())));
+
+            // Call the core snapshot creation logic with correct arguments
+            let snapshot_uid = fj_snapshot_utils::create_index_snapshot(
+                index_uid.as_str(),
+                &index,
+                metadata, // Pass the read metadata
+                &self.scheduler.snapshots_path,
+                // Remove progress argument
+            )
+            .map_err(|e| Error::SnapshotCreationFailed {
+                index_uid: index_uid.clone(),
+                source: Box::new(e),
+            })?;
+
+            Ok(snapshot_uid)
+        })();
+
+        // Always release the lock, regardless of success or failure
+        self.index_mapper.set_currently_updating_index(None);
+
+        match snapshot_result {
+            Ok(snapshot_uid) => {
+                task.status = Status::Succeeded;
+                if let Some(Details::SingleIndexSnapshotCreation { snapshot_uid: details_uid }) =
+                    &mut task.details
+                {
+                    *details_uid = Some(snapshot_uid);
+                } else {
+                    // This case should ideally not happen if default_details was set correctly
+                    task.details =
+                        Some(Details::SingleIndexSnapshotCreation { snapshot_uid: Some(snapshot_uid) });
+                }
+                task.error = None; // Clear any previous error if retrying
+            }
+            Err(e) => {
+                task.status = Status::Failed;
+                task.error = Some(e.into());
+                // Ensure details reflect failure (snapshot_uid should remain None or be set to None)
+                if let Some(Details::SingleIndexSnapshotCreation { snapshot_uid: details_uid }) =
+                    &mut task.details
+                {
+                    *details_uid = None;
+                } else {
+                     task.details =
+                        Some(Details::SingleIndexSnapshotCreation { snapshot_uid: None });
+                }
+            }
+        }
+
+        Ok(task)
     }
 }

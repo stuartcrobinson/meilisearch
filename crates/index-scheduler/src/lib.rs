@@ -34,6 +34,9 @@ mod queue;
 // [meilisearchfj] Custom tests for single-index snapshot feature
 #[cfg(test)]
 mod tests;
+// [meilisearchfj] Custom test utilities
+#[cfg(test)]
+mod fj_test_utils;
 mod scheduler;
 #[cfg(test)]
 mod test_utils;

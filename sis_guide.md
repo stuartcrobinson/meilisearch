@@ -64,6 +64,7 @@ This guide outlines the steps for implementing the core backend functionality, s
         *   Using a generated, unique snapshot UID (e.g., timestamp-based or UUID) is recommended.
     *   Update necessary `impl` blocks (`as_kind`, `indexes`, `default_details`).
 *   **Testing (TDD)**: Write unit tests verifying the new enum variants exist, have the correct payloads, and `Task::index_uid()`/`default_details()` behave as expected. Test serialization/deserialization.
+*   **Step Completion Check**: Add the `cargo test` command here to run only the tests implemented for this step.
 
 ### 2. Implement Task Registration Logic
 
@@ -72,6 +73,7 @@ This guide outlines the steps for implementing the core backend functionality, s
     *   Ensure `Queue::register` correctly handles the new `KindWithContent` variants when called internally (e.g., from tests).
     *   Verify that `filter_out_references_to_newer_tasks` and `check_index_swap_validity` don't negatively interact.
 *   **Testing (TDD)**: Write integration tests (within the `index-scheduler` crate) that manually construct `KindWithContent` for the new types, call `queue.register`, and verify that tasks with the correct kind, payload, and initial status (`enqueued`) are persisted in the task database.
+*   **Step Completion Check**: Add the `cargo test` command here to run only the tests implemented for this step.
 
 ### 3. Implement Core Snapshot Creation Logic
 
@@ -101,6 +103,10 @@ crates/index-scheduler/src/lib.rs
             *   **Store**: Generate a unique snapshot identifier (`snapshot_uid`, e.g., based on timestamp/UUID). Create the snapshot filename incorporating this UID (e.g., `{index_uid}-{snapshot_uid}.snapshot.tar.gz`). Move the final snapshot tarball to the configured `snapshots_path`.
             *   Return the generated `snapshot_uid`.
 *   **Testing (TDD)**: Write unit/integration tests calling the `create_index_snapshot` function directly with a test index handle and path. Verify the snapshot file (`.snapshot.tar.gz`) is created correctly in the specified path with the expected naming convention. Unpack and verify `metadata.json` (including version) and `data.mdb`. Check that the correct `snapshot_uid` is returned. Test error handling (e.g., I/O errors).
+*   **Step Completion Check**: Add the `cargo test` command here to run only the tests implemented for this step.
+    ```
+    cargo test -p index-scheduler -- tests::msfj_sis_snapshot_creation::msfj_sis_snapshot_creation_tests
+    ```
 
 ### 3b. Complete Metadata Retrieval and Testing (Deferred)
 
@@ -114,6 +120,10 @@ crates/index-scheduler/src/lib.rs
         *   Deserializing `metadata.json`.
         *   Asserting that the corresponding fields in the deserialized `SnapshotMetadata` match the expected values.
 *   **Goal**: Ensure the `metadata.json` within the snapshot accurately and completely reflects *all* configurable settings of the source index as defined in the original Step 3 metadata specification.
+*   **Step Completion Check**: Add the `cargo test` command here to run only the tests implemented for this step.
+    ```
+    cargo test -p index-scheduler -- tests::msfj_sis_snapshot_creation::msfj_sis_snapshot_creation_tests
+    ```
 
 ### 4. Integrate Snapshot Creation into Scheduler
 
@@ -138,6 +148,7 @@ crates/index-scheduler/src/lib.rs
         *   **Finalize Task**: Based on the `Result` from the core logic: update the task status to `Succeeded` and store the returned `snapshot_uid` in `Details` on success, or update the task status to `Failed` and store the error on failure.
         *   **Release Lock**: Release the "currently updating" status via `IndexMapper::set_currently_updating_index(None)`.
 *   **Testing (TDD)**: Write integration tests: Manually enqueue a `SingleIndexSnapshotCreation` task. Run the scheduler's `tick()` method (or relevant parts). Verify the scheduler correctly calls the core `create_index_snapshot` function and handles its `Result` to update the task's final status (`Succeeded`/`Failed`) and `details.snapshot_uid` (on success). The snapshot file integrity itself is already tested in Step 3. Test error handling (e.g., index not found).
+*   **Step Completion Check**: Add the `cargo test` command here to run only the tests implemented for this step.
 
 ### 5. Implement Core Snapshot Import Logic (`IndexMapper` Method)
 
@@ -169,6 +180,7 @@ crates/index-scheduler/src/lib.rs
         *   **Cleanup**: Ensure the temporary unpack directory is reliably cleaned up (e.g., using `defer` or RAII pattern if applicable, or explicit cleanup in error paths) after unpacking.
         *   Return the opened `Index` and the parsed metadata.
 *   **Testing (TDD)**: Write integration tests calling the `IndexMapper::import_index_from_snapshot` method directly with a prepared snapshot file and target UID. Verify the index directory is created, `data.mdb` is present, the mapping exists in `index_mapping`, the `Index` object is returned, and the `IndexMap` contains the new index. **Specifically test the scenario where importing causes an LRU eviction to ensure `IndexMap::close` is handled correctly.** Test errors (invalid path, target exists, bad format, version mismatch, I/O). Verify temporary directory cleanup on success and failure.
+*   **Step Completion Check**: Add the `cargo test` command here to run only the tests implemented for this step.
 
 ### 6. Integrate Snapshot Import into Scheduler
 
@@ -193,6 +205,7 @@ crates/index-scheduler/src/error.rs
         *   **Apply Settings**: On success from the core logic, use the returned `Index` handle and parsed metadata (`ParsedMetadata.settings`) to apply the settings to the newly imported index. This typically involves creating an `update::Settings` builder, populating it from the parsed settings, and executing it within a write transaction on the imported index.
         *   **Finalize Task**: Based on the `Result` from *both* the core logic and the settings application: update the task status to `Succeeded` only if both succeeded. If either fails, update the status to `Failed` and store the relevant error in `Details`.
 *   **Testing (TDD)**: Write integration tests: Place a valid snapshot file in `snapshots_path`. Enqueue an `SingleIndexSnapshotImport` task. Run `tick()`. Verify the scheduler correctly calls the core `IndexMapper::import_index_from_snapshot` function, handles its `Result`, attempts settings application on success, and updates the task's final status based on the outcome of both steps. Check that the new index exists (via `IndexMapper` or API) and has the correct settings applied (check settings API or direct `milli::Index` methods). Test error handling during the settings application phase (ensure task fails correctly).
+*   **Step Completion Check**: Add the `cargo test` command here to run only the tests implemented for this step.
 
 ### 7. Add Progress Reporting (Optional Backend Part)
 
@@ -208,6 +221,7 @@ crates/index-scheduler/src/scheduler/process_batch.rs
     *   Define new enum variants for progress steps (e.g., `ValidatingSnapshot`, `CopyingIndexData`, `PackagingSnapshot`, `UnpackingSnapshot`, `ApplyingSettings`).
     *   Update the processing functions (from steps 4 & 6) to report progress via the `Progress` object.
 *   **Testing (TDD)**: Enhance tests from steps 4 & 6 to check the `details` field of completed tasks for expected progress steps.
+*   **Step Completion Check**: Add the `cargo test` command here to run only the tests implemented for this step.
 
 ## D. Error Handling Guide
 
@@ -238,9 +252,11 @@ Do not generate any SEARCH/REPLACE blocks or suggest code modifications for any 
 
 ### Troubleshooting:
 
+When encountering persistent compiler errors (like type mismatches, unresolved paths, or missing methods), avoid excessive trial-and-error. Instead, **prioritize understanding the involved types and interfaces.** Ask the AI assistant to show the definitions of relevant structs, enums, traits, and functions. Examine their fields (public vs. private), methods, and implemented traits. Additionally, request examples of similar code usage elsewhere in the Meilisearch codebase. This direct inspection often reveals the root cause (e.g., incorrect type usage, privacy issues, missing trait implementations, or incorrect method calls) much faster than repeated code change attempts.
+
 When the AI LLM coder (like aider) is trying to debug and fix errors, it should feel encouraged to ask to look at any other files that might be helpful.
 
-Debugging:                                                                                                           
+Debugging:
 
  1 Look at Definitions Sooner: When facing persistent type errors (E0223, E0308, E0433, E0599) or ambiguity, don't spend too long trying path        
    variations. Ask to see the definition of the relevant struct/enum/trait and the function/method being called much earlier. This would have quickly

@@ -78,6 +78,9 @@ pub fn create_index_snapshot(
             }
         })?;
 
+    // Ensure the target directory exists before creating the file
+    std::fs::create_dir_all(snapshots_path).map_err(|e| Error::IoError(e))?;
+
     // Create the final gzipped tarball
     let snapshot_file = File::create(&snapshot_filepath).map_err(|e| Error::IoError(e))?;
     let gz_encoder = GzEncoder::new(snapshot_file, Compression::default());

@@ -74,6 +74,11 @@ pub enum Error {
         .0.iter().map(|s| format!("`{}`", s)).collect::<Vec<_>>().join(", ")
     )]
     SwapIndexesNotFound(Vec<String>),
+    // #[error("Failed to create snapshot for index `{index_uid}`: {source}")] // Duplicate removed
+    // SnapshotCreationFailed {
+    //     index_uid: String,
+    //     source: Box<dyn std::error::Error + Send + Sync + 'static>,
+    // },
     #[error("Corrupted dump.")]
     CorruptedDump,
     #[error(
@@ -288,7 +293,7 @@ impl ErrorCode for Error {
 
             // This one should never be seen by the end user
             Error::AbortedTask => Code::Internal,
-            Error::SnapshotCreationFailed { .. } => Code::SnapshotCreationFailed,
+            Error::SnapshotCreationFailed { .. } => Code::SnapshotCreationFailed, // Already added, ensure it's correct
 
             #[cfg(test)]
             Error::PlannedFailure => Code::Internal,
