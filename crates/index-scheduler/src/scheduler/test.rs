@@ -974,6 +974,12 @@ mod msfj_sis_scheduler_import_tests {
         let index = index_scheduler.index(source_index_uid).unwrap();
         let mut wtxn = index.write_txn().unwrap();
         // Apply settings *before* snapshotting
+        // Define settings within this scope
+        let mut settings = milli::update::Settings::new(
+            &mut wtxn,
+            &index,
+            index_scheduler.indexer_config(),
+        );
         settings.set_filterable_fields(vec![FilterableAttributesRule::Field("name".to_string())]);
         settings.execute(|_| {}, || false).unwrap();
         wtxn.commit().unwrap(); // Commit settings changes
@@ -1145,7 +1151,7 @@ mod msfj_sis_scheduler_import_tests {
         let task_id = index_scheduler.register(import_task, None, false).unwrap().uid;
 
         // Process the task
-        handle.advance_one_batch(); // Advance normally, expect processing to fail
+        handle.advance_one_failed_batch(); // Expect processing to fail
 
         // Assertions
         let rtxn = index_scheduler.read_txn().unwrap();
@@ -1176,7 +1182,7 @@ mod msfj_sis_scheduler_import_tests {
         let task_id = index_scheduler.register(import_task, None, false).unwrap().uid;
 
         // Process the task
-        handle.advance_one_batch(); // Advance normally, expect processing to fail
+        handle.advance_one_failed_batch(); // Expect processing to fail
 
         // Assertions
         let rtxn = index_scheduler.read_txn().unwrap();
@@ -1209,7 +1215,7 @@ mod msfj_sis_scheduler_import_tests {
         let task_id = index_scheduler.register(import_task, None, false).unwrap().uid;
 
         // Process the task
-        handle.advance_one_batch(); // Advance normally, expect processing to fail
+        handle.advance_one_failed_batch(); // Expect processing to fail
 
         // Assertions
         let rtxn = index_scheduler.read_txn().unwrap();
@@ -1267,7 +1273,7 @@ mod msfj_sis_scheduler_import_tests {
         let task_id = index_scheduler.register(import_task, None, false).unwrap().uid;
 
         // Process the task
-        handle.advance_one_batch(); // Advance normally, expect processing to fail
+        handle.advance_one_failed_batch(); // Expect processing to fail
 
         // Assertions
         let rtxn = index_scheduler.read_txn().unwrap();
