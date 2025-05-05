@@ -1387,9 +1387,32 @@ mod msfj_sis_scheduler_import_tests {
         // Use correct path to get_task
         let task = index_scheduler.queue.tasks.get_task(&rtxn, task_id).unwrap().unwrap();
         assert_eq!(task.status, Status::Failed);
-        assert!(task.error.is_some());
-        // Compare numeric status code
-        let status_code = task.error.as_ref().unwrap().code.as_u16();
-        assert_eq!(status_code, 400); // SnapshotVersionMismatch (BAD_REQUEST)
+        assert!(task.error.is_some(), "Task should have failed with an error");
+        let response_error = task.error.as_ref().unwrap();
+
+        // Verify the error message contains expected text for version mismatch.
+        // This checks the persisted information.
+        assert!(
+            response_error.message.contains("Snapshot version mismatch"),
+            "Error message mismatch. Expected 'Snapshot version mismatch', got: {}",
+            response_error.message
+        );
+        // Extract expected versions from the error message itself for robustness
+        let expected_snapshot_version = "0.99.0"; // As set in the test
+        let expected_instance_version = env!("CARGO_PKG_VERSION"); // Get current version dynamically
+        assert!(
+            response_error.message.contains(&format!("snapshot version is `{}`", expected_snapshot_version)),
+            "Error message mismatch. Expected snapshot version '{}', got: {}",
+            expected_snapshot_version, response_error.message
+        );
+        assert!(
+            response_error.message.contains(&format!("instance version is `{}`", expected_instance_version)),
+            "Error message mismatch. Expected instance version '{}', got: {}",
+            expected_instance_version, response_error.message
+        );
+
+        // The StatusCode (response_error.code) is not persisted due to #[serde(skip)].
+        // Asserting on it after deserialization will likely fail as it defaults to 200 OK.
+        // Checking the message content is a more reliable way to verify the correct error was stored.
     }
 }
