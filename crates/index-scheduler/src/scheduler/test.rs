@@ -1653,3 +1653,391 @@ mod msfj_sis_scheduler_import_tests {
         assert!(imported_embedders.iter().any(|c| c.name == "default"));
     }
 }
+
+// [meilisearchfj] End-to-end tests for Single Index Snapshot create/import via scheduler
+#[cfg(test)]
+mod msfj_sis_scheduler_e2e_tests {
+    use super::*; // Bring parent module's imports into scope
+    use crate::test_utils::{index_creation_task, replace_document_import_task, sample_documents};
+    use crate::IndexScheduler;
+    use big_s::S;
+    use meilisearch_types::batches::Batch; // For progress trace verification
+    use meilisearch_types::facet_values_sort::FacetValuesSort;
+    use meilisearch_types::locales::LocalizedAttributesRuleView;
+    use meilisearch_types::milli::vector::settings::{EmbedderSource, EmbeddingSettings};
+    use meilisearch_types::settings::{Settings, Unchecked};
+    use meilisearch_types::tasks::{Details, KindWithContent, Status};
+    use milli::index::PrefixSearch;
+    use milli::proximity::ProximityPrecision;
+    use milli::update::Setting;
+    use milli::{FilterableAttributesRule, LocalizedAttributesRule, OrderBy, OrderByMap};
+    use std::collections::{BTreeMap, BTreeSet, HashSet};
+    use std::path::PathBuf;
+
+    #[actix_rt::test]
+    async fn test_e2e_snapshot_create_import_verify() {
+        // === 1. Setup ===
+        let (index_scheduler, mut handle) = IndexScheduler::test(true, vec![]);
+        let source_index_uid = S("source_e2e");
+        let target_index_uid = S("target_e2e");
+
+        // === 2. Prepare Source Index ===
+
+        // Create index
+        let task = index_creation_task(&source_index_uid, Some("id"));
+        let _task_id = index_scheduler.register(task, None, false).unwrap().uid;
+        handle.advance_one_successful_batch();
+
+        // Add documents
+        let (file, documents_count) = sample_documents(&index_scheduler, 0, 10); // 10 documents
+        file.persist().unwrap();
+        let task = replace_document_import_task(&source_index_uid, Some("id"), 0, documents_count);
+        let _task_id = index_scheduler.register(task, None, false).unwrap().uid;
+        handle.advance_one_successful_batch();
+
+        // Apply diverse settings
+        let mut settings = Settings::<Unchecked>::default();
+        settings.displayed_attributes = Setting::Set(vec![S("id"), S("name")]);
+        settings.searchable_attributes = Setting::Set(vec![S("name"), S("description")]);
+        settings.filterable_attributes =
+            Setting::Set(vec![FilterableAttributesRule::Field(S("category"))]);
+        settings.sortable_attributes = Setting::Set(vec![S("price")].into_iter().collect()); // Use BTreeSet
+        settings.ranking_rules = Setting::Set(vec![
+            milli::RankingRule::Typo,
+            milli::RankingRule::Words,
+            milli::RankingRule::Proximity,
+        ]);
+        settings.stop_words = Setting::Set(BTreeSet::from([S("the"), S("a")]));
+        settings.synonyms = Setting::Set(BTreeMap::from([(S("cat"), vec![S("feline")])]));
+        settings.distinct_attribute = Setting::Set(Some(S("sku")));
+        // Typo Tolerance
+        settings.typo_tolerance = Setting::Set(meilisearch_types::settings::TypoToleranceSettings {
+            enabled: Setting::Set(false),
+            min_word_size_for_typos: Setting::Set(
+                meilisearch_types::settings::MinWordSizeForTypos {
+                    one_typo: Setting::Set(6),
+                    two_typos: Setting::Set(10),
+                },
+            ),
+            disable_on_words: Setting::Set(BTreeSet::from([S("exactword")])),
+            disable_on_attributes: Setting::Set(HashSet::from([S("exactattr")])),
+        });
+        // Faceting
+        settings.faceting = Setting::Set(meilisearch_types::settings::FacetingSettings {
+            max_values_per_facet: Setting::Set(50),
+            sort_facet_values_by: Setting::Set(BTreeMap::from([(
+                S("size"),
+                FacetValuesSort::Count,
+            )])),
+            // facet_search: Setting::NotSet, // Assuming default or handled elsewhere
+        });
+        // Pagination
+        settings.pagination = Setting::Set(meilisearch_types::settings::PaginationSettings {
+            max_total_hits: Setting::Set(500),
+        });
+        // Proximity Precision
+        settings.proximity_precision = Setting::Set(ProximityPrecision::ByWord);
+        // Embedders
+        let mut embedders = BTreeMap::default();
+        embedders.insert(
+            S("default"),
+            Setting::Set(EmbeddingSettings {
+                source: Setting::Set(EmbedderSource::UserProvided),
+                dimensions: Setting::Set(1),
+                ..Default::default()
+            }),
+        );
+        settings.embedders = Setting::Set(embedders);
+        // Localized Attributes
+        settings.localized_attributes = Setting::Set(vec![LocalizedAttributesRuleView {
+            attribute_patterns: vec![S("title#fr")].into(),
+            locales: vec![milli::tokenizer::Language::from_code("fra").unwrap().into()],
+        }]);
+        // Tokenization
+        settings.separator_tokens = Setting::Set(BTreeSet::from([S("&")]));
+        settings.non_separator_tokens = Setting::Set(BTreeSet::from([S("#")]));
+        settings.dictionary = Setting::Set(BTreeSet::from([S("wordA"), S("wordB")]));
+        // Search Cutoff
+        settings.search_cutoff_ms = Setting::Set(100);
+        // Prefix Search
+        settings.prefix_search = Setting::Set(PrefixSearch::IndexingTime);
+        // Facet Search (Assuming it exists and needs setting)
+        // settings.facet_search = Setting::Set(meilisearch_types::settings::FacetSearchSettings {
+        //     enabled: Setting::Set(true),
+        //     max_candidates: Setting::Set(10),
+        // });
+
+        let task = KindWithContent::SettingsUpdate {
+            index_uid: source_index_uid.clone(),
+            new_settings: Box::new(settings),
+            is_deletion: false,
+            allow_index_creation: false, // Index already exists
+        };
+        let _task_id = index_scheduler.register(task, None, false).unwrap().uid;
+        handle.advance_one_successful_batch();
+
+        // === 3. Create Snapshot ===
+        let creation_task_payload =
+            KindWithContent::SingleIndexSnapshotCreation { index_uid: source_index_uid.clone() };
+        let creation_task_id =
+            index_scheduler.register(creation_task_payload, None, false).unwrap().uid;
+
+        handle.advance_one_successful_batch(); // Process snapshot creation
+
+        let snapshot_path: PathBuf; // Declare snapshot_path here
+        {
+            // Scope for read transaction
+            let rtxn = index_scheduler.read_txn().unwrap();
+            let creation_task =
+                index_scheduler.queue.tasks.get_task(&rtxn, creation_task_id).unwrap().unwrap();
+            assert_eq!(
+                creation_task.status,
+                Status::Succeeded,
+                "Snapshot creation failed: {:?}",
+                creation_task.error
+            );
+            assert!(creation_task.error.is_none());
+
+            let snapshot_uid = match creation_task.details {
+                Some(Details::SingleIndexSnapshotCreation { snapshot_uid: Some(uid) }) => uid,
+                _ => panic!("Snapshot UID not found in creation task details"),
+            };
+
+            // Construct path based on convention: {index_uid}-{snapshot_uid}.snapshot.tar.gz
+            let filename = format!("{}-{}.snapshot.tar.gz", source_index_uid, snapshot_uid);
+            snapshot_path = index_scheduler.fj_snapshots_path().join(filename); // Assign to outer scope variable
+            assert!(snapshot_path.is_file(), "Snapshot file not found at expected path: {:?}", snapshot_path);
+
+            // Verify creation progress trace
+            let batch_id = creation_task.batch_uid.expect("Creation task should have a batch UID");
+            let batch: Batch =
+                index_scheduler.queue.batches.get_batch(&rtxn, batch_id).unwrap().expect("Creation batch not found");
+            let progress_steps: Vec<String> =
+                batch.stats.progress_trace.iter().map(|(name, _)| name.clone()).collect();
+            assert_eq!(
+                progress_steps,
+                vec![
+                    "processing tasks",
+                    "reading metadata",
+                    "copying index data",
+                    "packaging snapshot",
+                    "writing tasks to disk"
+                ],
+                "Progress trace mismatch for snapshot creation"
+            );
+        } // Read transaction dropped here
+
+        // === 4. Import Snapshot ===
+        let import_task_payload = KindWithContent::SingleIndexSnapshotImport {
+            source_snapshot_path: snapshot_path.to_str().unwrap().to_string(),
+            target_index_uid: target_index_uid.clone(),
+        };
+        let import_task_id =
+            index_scheduler.register(import_task_payload, None, false).unwrap().uid;
+
+        handle.advance_one_successful_batch(); // Process snapshot import
+
+        {
+            // Scope for read transaction
+            let rtxn = index_scheduler.read_txn().unwrap();
+            let import_task =
+                index_scheduler.queue.tasks.get_task(&rtxn, import_task_id).unwrap().unwrap();
+            assert_eq!(
+                import_task.status,
+                Status::Succeeded,
+                "Snapshot import failed: {:?}",
+                import_task.error
+            );
+            assert!(import_task.error.is_none());
+
+            // Assert details
+            match import_task.details {
+                Some(Details::SingleIndexSnapshotImport {
+                    source_snapshot_uid: details_source_uid,
+                    target_index_uid: details_target_uid,
+                }) => {
+                    let expected_source_uid = snapshot_path
+                        .file_stem()
+                        .unwrap()
+                        .to_str()
+                        .unwrap()
+                        .split_once('-')
+                        .map(|(_, uid)| uid)
+                        .unwrap_or("");
+                    assert_eq!(details_source_uid, expected_source_uid);
+                    assert_eq!(details_target_uid, target_index_uid);
+                }
+                _ => panic!("Incorrect details for import task: {:?}", import_task.details),
+            }
+
+            // Verify import progress trace
+            let batch_id = import_task.batch_uid.expect("Import task should have a batch UID");
+            let batch: Batch =
+                index_scheduler.queue.batches.get_batch(&rtxn, batch_id).unwrap().expect("Import batch not found");
+            let progress_steps: Vec<String> =
+                batch.stats.progress_trace.iter().map(|(name, _)| name.clone()).collect();
+            assert_eq!(
+                progress_steps,
+                vec![
+                    "processing tasks",
+                    "validating snapshot",
+                    "unpacking snapshot",
+                    "applying settings",
+                    "writing tasks to disk"
+                ],
+                "Progress trace mismatch for snapshot import"
+            );
+        } // Read transaction dropped here
+
+        // === 5. Verify Indexes ===
+        let source_index = index_scheduler.index(&source_index_uid).unwrap();
+        let target_index = index_scheduler.index(&target_index_uid).unwrap();
+
+        let source_rtxn = source_index.read_txn().unwrap();
+        let target_rtxn = target_index.read_txn().unwrap();
+
+        // Verify document count
+        assert_eq!(
+            source_index.number_of_documents(&source_rtxn).unwrap(),
+            target_index.number_of_documents(&target_rtxn).unwrap(),
+            "Document count mismatch"
+        );
+
+        // Verify all settings (add more assertions as needed)
+        assert_eq!(
+            source_index.displayed_attributes(&source_rtxn).unwrap(),
+            target_index.displayed_attributes(&target_rtxn).unwrap(),
+            "Displayed attributes mismatch"
+        );
+        assert_eq!(
+            source_index.searchable_attributes(&source_rtxn).unwrap(),
+            target_index.searchable_attributes(&target_rtxn).unwrap(),
+            "Searchable attributes mismatch"
+        );
+        assert_eq!(
+            source_index.filterable_attributes_rules(&source_rtxn).unwrap(),
+            target_index.filterable_attributes_rules(&target_rtxn).unwrap(),
+            "Filterable attributes mismatch"
+        );
+        assert_eq!(
+            source_index.sortable_attributes(&source_rtxn).unwrap(),
+            target_index.sortable_attributes(&target_rtxn).unwrap(),
+            "Sortable attributes mismatch"
+        );
+        assert_eq!(
+            source_index.ranking_rules(&source_rtxn).unwrap(),
+            target_index.ranking_rules(&target_rtxn).unwrap(),
+            "Ranking rules mismatch"
+        );
+        assert_eq!(
+            source_index.stop_words(&source_rtxn).unwrap(),
+            target_index.stop_words(&target_rtxn).unwrap(),
+            "Stop words mismatch"
+        );
+        assert_eq!(
+            source_index.synonyms(&source_rtxn).unwrap(),
+            target_index.synonyms(&target_rtxn).unwrap(),
+            "Synonyms mismatch"
+        );
+        assert_eq!(
+            source_index.distinct_attribute(&source_rtxn).unwrap(),
+            target_index.distinct_attribute(&target_rtxn).unwrap(),
+            "Distinct attribute mismatch"
+        );
+        // Typo Tolerance
+        assert_eq!(
+            source_index.authorize_typos(&source_rtxn).unwrap(),
+            target_index.authorize_typos(&target_rtxn).unwrap(),
+            "Typo tolerance enabled mismatch"
+        );
+        assert_eq!(
+            source_index.min_word_len_one_typo(&source_rtxn).unwrap(),
+            target_index.min_word_len_one_typo(&target_rtxn).unwrap(),
+            "Min word len one typo mismatch"
+        );
+        assert_eq!(
+            source_index.min_word_len_two_typos(&source_rtxn).unwrap(),
+            target_index.min_word_len_two_typos(&target_rtxn).unwrap(),
+            "Min word len two typos mismatch"
+        );
+        assert_eq!(
+            source_index.exact_words(&source_rtxn).unwrap(),
+            target_index.exact_words(&target_rtxn).unwrap(),
+            "Exact words mismatch"
+        );
+         assert_eq!(
+            source_index.exact_attributes(&source_rtxn).unwrap().into_iter().collect::<HashSet<_>>(), // Convert Vec<&str> to HashSet<String>
+            target_index.exact_attributes(&target_rtxn).unwrap().into_iter().collect::<HashSet<_>>(), // Convert Vec<&str> to HashSet<String>
+            "Exact attributes mismatch"
+        );
+        // Faceting
+        assert_eq!(
+            source_index.max_values_per_facet(&source_rtxn).unwrap(),
+            target_index.max_values_per_facet(&target_rtxn).unwrap(),
+            "Max values per facet mismatch"
+        );
+        assert_eq!(
+            source_index.sort_facet_values_by(&source_rtxn).unwrap(),
+            target_index.sort_facet_values_by(&target_rtxn).unwrap(),
+            "Sort facet values by mismatch"
+        );
+        // Pagination
+        assert_eq!(
+            source_index.pagination_max_total_hits(&source_rtxn).unwrap(),
+            target_index.pagination_max_total_hits(&target_rtxn).unwrap(),
+            "Pagination max total hits mismatch"
+        );
+        // Proximity Precision
+        assert_eq!(
+            source_index.proximity_precision(&source_rtxn).unwrap(),
+            target_index.proximity_precision(&target_rtxn).unwrap(),
+            "Proximity precision mismatch"
+        );
+        // Embedders
+        assert_eq!(
+            source_index.embedding_configs(&source_rtxn).unwrap(),
+            target_index.embedding_configs(&target_rtxn).unwrap(),
+            "Embedder configs mismatch"
+        );
+        // Localized Attributes
+        assert_eq!(
+            source_index.localized_attributes_rules(&source_rtxn).unwrap(),
+            target_index.localized_attributes_rules(&target_rtxn).unwrap(),
+            "Localized attributes mismatch"
+        );
+        // Tokenization
+        assert_eq!(
+            source_index.separator_tokens(&source_rtxn).unwrap(),
+            target_index.separator_tokens(&target_rtxn).unwrap(),
+            "Separator tokens mismatch"
+        );
+        assert_eq!(
+            source_index.non_separator_tokens(&source_rtxn).unwrap(),
+            target_index.non_separator_tokens(&target_rtxn).unwrap(),
+            "Non-separator tokens mismatch"
+        );
+        assert_eq!(
+            source_index.dictionary(&source_rtxn).unwrap(),
+            target_index.dictionary(&target_rtxn).unwrap(),
+            "Dictionary mismatch"
+        );
+        // Search Cutoff
+        assert_eq!(
+            source_index.search_cutoff(&source_rtxn).unwrap(),
+            target_index.search_cutoff(&target_rtxn).unwrap(),
+            "Search cutoff mismatch"
+        );
+        // Prefix Search
+        assert_eq!(
+            source_index.prefix_search(&source_rtxn).unwrap(),
+            target_index.prefix_search(&target_rtxn).unwrap(),
+            "Prefix search mismatch"
+        );
+        // Facet Search (if applicable)
+        // assert_eq!(
+        //     source_index.facet_search(&source_rtxn).unwrap(),
+        //     target_index.facet_search(&target_rtxn).unwrap(),
+        //     "Facet search mismatch"
+        // );
+    }
+}
