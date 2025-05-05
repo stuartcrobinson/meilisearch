@@ -1683,21 +1683,20 @@ mod msfj_sis_scheduler_e2e_tests {
     async fn test_e2e_snapshot_create_import_verify() {
         // === 1. Setup ===
         let (index_scheduler, mut handle) = IndexScheduler::test(true, vec![]);
-        let source_index_uid = S("source_e2e");
+        // Define UIDs directly where used to ensure 'static lifetime
         let target_index_uid = S("target_e2e");
 
         // === 2. Prepare Source Index ===
 
-        // Create index
-        let task = index_creation_task(&source_index_uid, Some("id"));
+        // Create index using literal
+        let task = index_creation_task(S("source_e2e"), Some("id"));
         let _task_id = index_scheduler.register(task, None, false).unwrap().uid;
         handle.advance_one_successful_batch();
 
-        // Add documents
+        // Add documents using literal
         let (file, documents_count) = sample_documents(&index_scheduler, 0, 10); // 10 documents
         file.persist().unwrap();
-        // Pass reference to source_index_uid as suggested by compiler error E0308
-        let task = replace_document_import_task(&source_index_uid, Some("id"), 0, documents_count);
+        let task = replace_document_import_task(S("source_e2e"), Some("id"), 0, documents_count);
         let _task_id = index_scheduler.register(task, None, false).unwrap().uid;
         handle.advance_one_successful_batch();
 
@@ -1779,8 +1778,9 @@ mod msfj_sis_scheduler_e2e_tests {
         //     max_candidates: Setting::Set(10),
         // });
 
+        // Update settings using literal
         let task = KindWithContent::SettingsUpdate {
-            index_uid: source_index_uid.clone(),
+            index_uid: S("source_e2e"),
             new_settings: Box::new(settings),
             is_deletion: false,
             allow_index_creation: false, // Index already exists
@@ -1789,8 +1789,9 @@ mod msfj_sis_scheduler_e2e_tests {
         handle.advance_one_successful_batch();
 
         // === 3. Create Snapshot ===
+        // Create snapshot using literal
         let creation_task_payload =
-            KindWithContent::SingleIndexSnapshotCreation { index_uid: source_index_uid.clone() };
+            KindWithContent::SingleIndexSnapshotCreation { index_uid: S("source_e2e") };
         let creation_task_id =
             index_scheduler.register(creation_task_payload, None, false).unwrap().uid;
 
@@ -1816,7 +1817,7 @@ mod msfj_sis_scheduler_e2e_tests {
             };
 
             // Construct path based on convention: {index_uid}-{snapshot_uid}.snapshot.tar.gz
-            let filename = format!("{}-{}.snapshot.tar.gz", source_index_uid, snapshot_uid);
+            let filename = format!("{}-{}.snapshot.tar.gz", S("source_e2e"), snapshot_uid); // Use literal
             snapshot_path = index_scheduler.fj_snapshots_path().join(filename); // Assign to outer scope variable
             assert!(snapshot_path.is_file(), "Snapshot file not found at expected path: {:?}", snapshot_path);
 
@@ -1902,7 +1903,8 @@ mod msfj_sis_scheduler_e2e_tests {
         } // Read transaction dropped here
 
         // === 5. Verify Indexes ===
-        let source_index = index_scheduler.index(&source_index_uid).unwrap();
+        // Get indexes using literals
+        let source_index = index_scheduler.index(S("source_e2e")).unwrap();
         let target_index = index_scheduler.index(&target_index_uid).unwrap();
 
         let source_rtxn = source_index.read_txn().unwrap();
