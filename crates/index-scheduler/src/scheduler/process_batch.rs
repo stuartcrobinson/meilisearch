@@ -887,7 +887,7 @@ impl IndexScheduler {
                 settings_builder.set_embedder_settings(converted_embedders);
             }
             // Localized Attributes (Assuming it exists in Settings<Unchecked>)
-            if let Setting::Set(val) = settings.localized_attributes { settings_builder.set_localized_attributes_rules(val); } // Use correct method name
+            if let Setting::Set(val) = settings.localized_attributes { settings_builder.set_localized_attributes_rules(val.into_iter().map(|v| v.into()).collect()); } // Convert elements
             // Separator Tokens (Assuming it exists in Settings<Unchecked>)
             if let Setting::Set(val) = settings.separator_tokens { settings_builder.set_separator_tokens(val); }
             // Non-Separator Tokens (Assuming it exists in Settings<Unchecked>)
