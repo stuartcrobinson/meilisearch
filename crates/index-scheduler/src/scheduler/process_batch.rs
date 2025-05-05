@@ -919,19 +919,11 @@ impl IndexScheduler {
             }
             Err(e) => { // Import or settings failed
                 task.status = Status::Failed;
-                // Manually construct ResponseError from `e` without consuming it.
-                // Error implements ErrorCode, which provides the necessary fields.
-                let code = e.error_code(); // Get the error code enum variant
-                let response_error = meilisearch_types::error::ResponseError {
-                    message: e.to_string(),
-                    // Use the correct field names based on the struct definition
-                    error_code: code.name(), // Use code.name() for the string representation
-                    error_type: code.type_(), // Use code.type_() for the string representation
-                    error_link: e.error_url(), // Use the method from the ErrorCode trait
-                    // The `code` field (StatusCode) is set internally by the `From` impl or `from_msg`
-                    // We don't need to set it manually here when constructing.
-                };
-                task.error = Some(response_error); // Store the constructed ResponseError
+                // Use the From<Error> implementation for ResponseError, which correctly
+                // handles private fields and methods via the ErrorCode trait.
+                // We still need the original error `e` to return, so clone it before converting.
+                let response_error: meilisearch_types::error::ResponseError = e.clone().into();
+                task.error = Some(response_error); // Store the converted ResponseError
                 task.details = task.kind.default_details().map(|d| d.to_failed());
                 // Propagate the original error `e` up to the caller (process_batch)
                 // Note: This might require process_batch to handle this specific error structure if needed,
