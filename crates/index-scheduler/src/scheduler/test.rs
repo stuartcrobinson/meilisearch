@@ -1828,39 +1828,13 @@ mod msfj_sis_scheduler_e2e_tests {
             tracing::info!(target: "snapshot_e2e_test", "Checking file existence immediately before assertion loop: {:?} -> Exists: {}", snapshot_path, pre_loop_exists);
             // === End Pre-Loop Check ===
 
-            // Retry assertion with delay for filesystem sync
-            let mut found = false;
-            for i in 0..5 { // Retry up to 5 times
-                if snapshot_path.is_file() {
-                    found = true;
-                    tracing::info!(target: "snapshot_e2e_test", "Snapshot file found after {} retries.", i);
-                    break;
-                }
-                // === Detailed Diagnostics Inside Loop ===
-                let file_exists = snapshot_path.exists();
-                let parent_exists = parent_dir.exists();
-                let parent_perms = parent_dir.metadata().map(|m| m.permissions()).ok(); // Get parent permissions if possible
-                let parent_contents: Option<Vec<String>> = parent_dir.read_dir().map(|read_dir| {
-                    read_dir
-                        .filter_map(|entry| entry.ok())
-                        .map(|entry| entry.file_name().to_string_lossy().into_owned())
-                        .collect()
-                }).ok(); // List parent directory contents if possible
-
-                tracing::warn!(
-                    target: "snapshot_e2e_test",
-                    "Snapshot file not found on attempt {}. Path: {:?}, is_file: false, exists: {}, parent_exists: {}, parent_perms: {:?}, parent_contents: {:?}. Retrying...",
-                    i,
-                    snapshot_path, // Log path again inside loop
-                    file_exists,
-                    parent_exists,
-                    parent_perms,
-                    parent_contents
-                );
-                // === End Detailed Diagnostics ===
-                std::thread::sleep(std::time::Duration::from_millis(100)); // Wait 100ms
-            }
-            assert!(found, "Snapshot file not found at expected path after retries: {:?}", snapshot_path);
+            // === Simplified Assertion ===
+            // Remove the retry loop and assert directly after the pre-loop check.
+            // If the pre-loop check passes, this should ideally pass too unless something
+            // happens *exactly* between the pre-loop log and this assertion.
+            assert!(snapshot_path.is_file(), "[Simplified Assertion Failed] Snapshot file {:?} not found immediately after pre-loop check.", snapshot_path);
+            tracing::info!(target: "snapshot_e2e_test", "[Simplified Assertion Passed] Snapshot file {:?} found.", snapshot_path);
+            // === End Simplified Assertion ===
 
 
             // Verify creation progress trace
