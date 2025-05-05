@@ -962,7 +962,7 @@ mod msfj_sis_scheduler_import_tests {
     // Moved inside the module
     async fn create_test_snapshot( // Make the function async
         index_scheduler: &IndexScheduler,
-        handle: &mut crate::test_utils::IndexSchedulerHandle, // Add handle parameter
+        // handle: &mut crate::test_utils::IndexSchedulerHandle, // Removed unused handle parameter
         source_index_uid: &str,
         // Remove unused target_snapshot_name: &str,
     ) -> PathBuf {
@@ -997,9 +997,6 @@ mod msfj_sis_scheduler_import_tests {
         // snapshot_dir is the directory where the snapshot will be created.
         // snapshot_path will be the *actual* path returned by the creation function.
 
-        // Log the directory just before creation attempt
-        tracing::info!(target: "test::snapshot", "Attempting to create snapshot in directory: {:?}", snapshot_dir);
-
         let index_rtxn = index.read_txn().unwrap();
         // Handle potential error from reading metadata
         let metadata = fj_snapshot_utils::read_metadata_inner(source_index_uid, &index, &index_rtxn)
@@ -1022,46 +1019,6 @@ mod msfj_sis_scheduler_import_tests {
 
         // Now snapshot_path holds the actual path to the created file.
         // Perform checks on this correct path.
-
-        // Remove diagnostic delay as it didn't help
-        // std::thread::sleep(std::time::Duration::from_millis(150));
-
-        // Add extra diagnostics immediately before the assert using the correct snapshot_path
-        tracing::info!(target: "test::snapshot", "[create_test_snapshot] Starting final checks before assert for actual path: {:?}", snapshot_path);
-
-        // Check 1: List parent directory contents (should be snapshot_dir)
-        if let Some(parent) = snapshot_path.parent() {
-             tracing::info!(target: "test::snapshot", "[create_test_snapshot] Listing contents of parent directory: {:?}", parent);
-             match std::fs::read_dir(parent) {
-                 Ok(entries) => {
-                     for entry in entries {
-                         match entry {
-                             Ok(e) => tracing::info!(target: "test::snapshot", "  - Found entry: {:?}", e.path()),
-                             Err(err) => tracing::warn!(target: "test::snapshot", "  - Error reading directory entry: {}", err),
-                         }
-                     }
-                 }
-                 Err(e) => tracing::error!(target: "test::snapshot", "  - Failed to read parent directory: {}", e),
-             }
-        } else {
-            tracing::warn!(target: "test::snapshot", "[create_test_snapshot] Could not get parent directory for listing.");
-        }
-
-        // Check 2: Attempt to open the actual snapshot file
-        tracing::info!(target: "test::snapshot", "[create_test_snapshot] Attempting to open actual file: {:?}", snapshot_path);
-        match std::fs::File::open(&snapshot_path) {
-            Ok(file) => {
-                tracing::info!(target: "test::snapshot", "  - Successfully opened actual file. Size: {:?}", file.metadata().map(|m| m.len()));
-                drop(file); // Close the file handle
-            }
-            Err(e) => tracing::error!(target: "test::snapshot", "  - Failed to open actual file: {}", e),
-        }
-
-        // Check 3: Standard checks (exists, is_file, metadata) on the actual snapshot file
-        let exists = snapshot_path.exists();
-        let is_file = snapshot_path.is_file();
-        let metadata_result = std::fs::metadata(&snapshot_path);
-        tracing::info!(target: "test::snapshot", "[create_test_snapshot] Standard checks on actual path: exists={}, is_file={}, metadata={:?}", exists, is_file, metadata_result);
 
         // The assertion should now pass as it checks the correct path
         assert!(snapshot_path.is_file(), "[create_test_snapshot] Snapshot file missing immediately after creation call (checking actual path): {:?}", snapshot_path);
@@ -1095,7 +1052,7 @@ mod msfj_sis_scheduler_import_tests {
 
         // 2. Create the snapshot of the prepared index
         let snapshot_path =
-            create_test_snapshot(&index_scheduler, &mut handle, source_index).await; // Add .await
+            create_test_snapshot(&index_scheduler, /* &mut handle, */ source_index).await; // Removed handle
 
         // 3. Register the import task
         let import_task = KindWithContent::SingleIndexSnapshotImport {
@@ -1196,7 +1153,7 @@ mod msfj_sis_scheduler_import_tests {
         // 3. Create the snapshot (now that settings are applied)
         // create_test_snapshot will use the existing index with applied settings.
         let snapshot_path =
-            create_test_snapshot(&index_scheduler, &mut handle, source_index).await; // Add .await
+            create_test_snapshot(&index_scheduler, /* &mut handle, */ source_index).await; // Removed handle
 
         // 4. Register the import task
         let import_task = KindWithContent::SingleIndexSnapshotImport {
@@ -1258,7 +1215,7 @@ mod msfj_sis_scheduler_import_tests {
 
         // 2. Create the snapshot of the prepared source index
         let snapshot_path =
-            create_test_snapshot(&index_scheduler, &mut handle, source_index).await; // Add .await
+            create_test_snapshot(&index_scheduler, /* &mut handle, */ source_index).await; // Removed handle
 
         // 3. Create the target index beforehand (this is the point of the test)
         let creation_task = index_creation_task(target_index, Some("id"));
@@ -1401,12 +1358,9 @@ mod msfj_sis_scheduler_import_tests {
 
         // 2. Create the snapshot of the prepared source index
         let snapshot_path =
-            create_test_snapshot(&index_scheduler, &mut handle, source_index).await; // Add .await
+            create_test_snapshot(&index_scheduler, /* &mut handle, */ source_index).await; // Removed handle
 
         // 3. Check snapshot exists *after* creation
-        // Add a small delay for potential filesystem sync issues
-        std::thread::sleep(std::time::Duration::from_millis(100));
-
         assert!(snapshot_path.is_file(), "[test_import_snapshot_version_mismatch] Snapshot file missing after creation: {:?}", snapshot_path);
 
         // Modify the metadata.json within the snapshot to have a different version
