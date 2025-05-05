@@ -1591,9 +1591,12 @@ mod msfj_sis_scheduler_import_tests {
 
         // Verify Faceting (using individual getters)
         assert_eq!(imported_index.max_values_per_facet(&index_rtxn).unwrap(), Some(50));
-        // Define expected using FacetValuesSort
+        // Define expected using FacetValuesSort, including the default "*" entry
         let expected_sort_by: BTreeMap<String, FacetValuesSort> =
-            BTreeMap::from([("size".to_string(), FacetValuesSort::Count)]); // Assuming Desc maps to Count
+            BTreeMap::from([
+                ("*".to_string(), FacetValuesSort::Alpha), // Add default entry
+                ("size".to_string(), FacetValuesSort::Count)
+            ]);
         // Convert milli::OrderByMap to BTreeMap<String, meilisearch_types::FacetValuesSort> for comparison
         let actual_sort_by: BTreeMap<String, FacetValuesSort> = imported_index.sort_facet_values_by(&index_rtxn).unwrap().into_iter().map(|(k, v)| (k, v.into())).collect();
         assert_eq!(actual_sort_by, expected_sort_by);
