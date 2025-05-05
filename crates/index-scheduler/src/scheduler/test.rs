@@ -1649,7 +1649,7 @@ mod msfj_sis_scheduler_import_tests {
 
         // Verify Facet Search
         let facet_search = imported_index.facet_search(&index_rtxn).unwrap();
-        assert_eq!(facet_search, Some(true)); // Check if facet_search is true
+        assert_eq!(facet_search, true); // Compare bool directly
 
         // Verify Embedders (basic check)
         let imported_embedders = imported_index.embedding_configs(&index_rtxn).unwrap();
@@ -1681,7 +1681,7 @@ mod msfj_sis_scheduler_e2e_tests {
     use milli::update::Setting;
     use milli::FilterableAttributesRule;
     // Removed unused OrderByMap import
-    use std::collections::{BTreeMap, BTreeSet, HashSet};
+    use std::collections::{BTreeMap, BTreeSet}; // Removed unused HashSet
     use std::path::PathBuf;
     use std::fs as std_fs; // Alias std::fs to avoid conflict
 
@@ -1799,11 +1799,14 @@ mod msfj_sis_scheduler_e2e_tests {
         settings.search_cutoff_ms = Setting::Set(100);
         // Prefix Search (Convert to Settings type)
         settings.prefix_search = Setting::Set(PrefixSearch::IndexingTime.into());
-        // Facet Search
-        settings.facet_search = Setting::Set(meilisearch_types::settings::FacetSearchSettings {
-            enabled: Setting::Set(true),
-            max_candidates: Setting::Set(10),
-        });
+        // Facet Search - Set the boolean flag directly
+        settings.facet_search = Setting::Set(true);
+        // Configure related faceting settings if needed (already done under settings.faceting)
+        // settings.faceting = Setting::Set(meilisearch_types::settings::FacetingSettings {
+        //     max_values_per_facet: Setting::Set(50), // Example
+        //     sort_facet_values_by: Setting::Set(BTreeMap::from([(S("size"), FacetValuesSort::Count)])), // Example
+        // });
+
 
         // Update settings using literal
         let task = KindWithContent::SettingsUpdate {
