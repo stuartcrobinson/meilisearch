@@ -854,31 +854,52 @@ impl IndexScheduler {
             if let Setting::Set(val) = settings.stop_words { settings_builder.set_stop_words(val); }
             if let Setting::Set(val) = settings.synonyms { settings_builder.set_synonyms(val); }
             if let Setting::Set(val) = settings.distinct_attribute { settings_builder.set_distinct_field(val); }
+            // Typo Tolerance Settings
             if let Setting::Set(typo_settings) = settings.typo_tolerance {
                 if let Setting::Set(val) = typo_settings.enabled { settings_builder.set_autorize_typos(val); }
                 if let Setting::Set(min_word_size) = typo_settings.min_word_size_for_typos {
                     if let Setting::Set(val) = min_word_size.one_typo { settings_builder.set_min_word_len_one_typo(val); }
                     if let Setting::Set(val) = min_word_size.two_typos { settings_builder.set_min_word_len_two_typos(val); }
                 }
+                // Apply missing typo sub-settings
                 if let Setting::Set(val) = typo_settings.disable_on_words { settings_builder.set_exact_words(val); }
                 if let Setting::Set(val) = typo_settings.disable_on_attributes { settings_builder.set_exact_attributes(val.into_iter().collect()); }
             }
+            // Faceting Settings
             if let Setting::Set(faceting_settings) = settings.faceting {
+                // Apply missing faceting sub-settings
                 if let Setting::Set(val) = faceting_settings.max_values_per_facet { settings_builder.set_max_values_per_facet(val); }
                 if let Setting::Set(val) = faceting_settings.sort_facet_values_by {
                     let milli_order_by_map = val.into_iter().map(|(k, v)| (k, v.into())).collect();
                     settings_builder.set_sort_facet_values_by(OrderByMap::from(milli_order_by_map));
                 }
             }
+            // Pagination Settings
             if let Setting::Set(pagination_settings) = settings.pagination {
+                // Apply missing pagination sub-settings
                 if let Setting::Set(val) = pagination_settings.max_total_hits { settings_builder.set_pagination_max_total_hits(val); }
             }
+            // Proximity Precision
             if let Setting::Set(val) = settings.proximity_precision { settings_builder.set_proximity_precision(val.into()); }
+            // Embedders
             if let Setting::Set(embedders) = settings.embedders {
                 let converted_embedders = fj_convert_embedder_settings(embedders)?;
                 settings_builder.set_embedder_settings(converted_embedders);
             }
-            // Add other settings as needed...
+            // Localized Attributes (Assuming it exists in Settings<Unchecked>)
+            if let Setting::Set(val) = settings.localized_attributes { settings_builder.set_localized_attributes(val); }
+            // Separator Tokens (Assuming it exists in Settings<Unchecked>)
+            if let Setting::Set(val) = settings.separator_tokens { settings_builder.set_separator_tokens(val); }
+            // Non-Separator Tokens (Assuming it exists in Settings<Unchecked>)
+            if let Setting::Set(val) = settings.non_separator_tokens { settings_builder.set_non_separator_tokens(val); }
+            // Dictionary (Assuming it exists in Settings<Unchecked>)
+            if let Setting::Set(val) = settings.dictionary { settings_builder.set_dictionary(val); }
+            // Search Cutoff (Assuming it exists in Settings<Unchecked>)
+            if let Setting::Set(val) = settings.search_cutoff_ms { settings_builder.set_search_cutoff(Some(val)); }
+            // Prefix Search (Assuming it exists in Settings<Unchecked>)
+            if let Setting::Set(val) = settings.prefix_search { settings_builder.set_prefix_search(val); }
+            // Facet Search (Assuming it exists in Settings<Unchecked>)
+            if let Setting::Set(val) = settings.facet_search { settings_builder.set_facet_search(val); }
 
             let must_stop_processing = self.scheduler.must_stop_processing.clone();
             settings_builder
