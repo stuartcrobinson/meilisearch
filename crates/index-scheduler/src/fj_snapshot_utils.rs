@@ -134,6 +134,7 @@ pub fn create_index_snapshot(
         });
     }
 
+    tracing::info!(target: "snapshot_creation", "Verification successful for: {:?}", snapshot_filepath);
 
     // Temp dir is automatically cleaned up when `temp_dir` goes out of scope here.
 
