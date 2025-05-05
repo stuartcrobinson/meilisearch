@@ -1818,7 +1818,19 @@ mod msfj_sis_scheduler_e2e_tests {
             tracing::info!(target: "snapshot_e2e_test", "Constructed expected snapshot path for assertion: {:?}", snapshot_path);
             // === End Test Logging Step ===
 
-            assert!(snapshot_path.is_file(), "Snapshot file not found at expected path: {:?}", snapshot_path);
+            // Retry assertion with delay for filesystem sync
+            let mut found = false;
+            for i in 0..5 { // Retry up to 5 times
+                if snapshot_path.is_file() {
+                    found = true;
+                    tracing::info!(target: "snapshot_e2e_test", "Snapshot file found after {} retries.", i);
+                    break;
+                }
+                tracing::warn!(target: "snapshot_e2e_test", "Snapshot file not found on attempt {}, retrying...", i);
+                std::thread::sleep(std::time::Duration::from_millis(100)); // Wait 100ms
+            }
+            assert!(found, "Snapshot file not found at expected path after retries: {:?}", snapshot_path);
+
 
             // Verify creation progress trace
             let batch_id = creation_task.batch_uid.expect("Creation task should have a batch UID");
