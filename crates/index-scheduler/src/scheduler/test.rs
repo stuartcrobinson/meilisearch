@@ -1242,9 +1242,11 @@ mod msfj_sis_scheduler_import_tests {
 
         // Modify the metadata.json within the snapshot to have a different version
         let temp_extract_dir = tempdir().unwrap();
-        { // Scope to ensure snapshot_file is closed before unpack
-            let snapshot_file = std::fs::File::open(&snapshot_path).unwrap(); // Use full path
-            let mut archive = tar::Archive::new(flate2::read::GzDecoder::new(snapshot_file));
+        { // Scope for file reading
+            // Read the compressed data into memory first
+            let compressed_data = std::fs::read(&snapshot_path).unwrap();
+            let gz_decoder = flate2::read::GzDecoder::new(compressed_data.as_slice());
+            let mut archive = tar::Archive::new(gz_decoder);
             // Add explicit error mapping for unpack
             archive.unpack(temp_extract_dir.path()).map_err(|e| {
                 format!("Failed to unpack snapshot '{}': {}", snapshot_path.display(), e)
