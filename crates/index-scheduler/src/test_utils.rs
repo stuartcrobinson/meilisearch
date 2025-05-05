@@ -20,7 +20,7 @@ use crate::insta_snapshot::snapshot_index_scheduler;
 use crate::{Error, IndexScheduler, IndexSchedulerOptions};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum Breakpoint { // Made public
+pub(crate) enum Breakpoint {
     // this state is only encountered while creating the scheduler in the test suite.
     Init,
 
@@ -34,7 +34,7 @@ pub enum Breakpoint { // Made public
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum FailureLocation { // Made public
+pub(crate) enum FailureLocation {
     InsideCreateBatch,
     InsideProcessBatch,
     PanicInsideProcessBatch,
@@ -180,7 +180,7 @@ impl IndexScheduler {
 }
 
 /// Return a `KindWithContent::IndexCreation` task
-pub fn index_creation_task( // Made public
+pub(crate) fn index_creation_task(
     index: &'static str,
     primary_key: Option<&'static str>,
 ) -> KindWithContent {
@@ -195,7 +195,7 @@ pub fn index_creation_task( // Made public
 /// - `content_file` is given as parameter
 /// - `documents_count` is given as parameter
 /// - `allow_index_creation` is set to `true`
-pub fn replace_document_import_task( // Made public
+pub(crate) fn replace_document_import_task(
     index: &'static str,
     primary_key: Option<&'static str>,
     content_file_uuid: u128,
@@ -212,7 +212,7 @@ pub fn replace_document_import_task( // Made public
 }
 
 /// Adapting to the new json reading interface
-pub fn read_json( // Made public
+pub(crate) fn read_json(
     bytes: &[u8],
     write: impl Write,
 ) -> std::result::Result<u64, DocumentFormatError> {
@@ -228,7 +228,7 @@ pub fn read_json( // Made public
 /// The update file contains just one simple document whose id is given by `document_id`.
 ///
 /// The uuid of the file and its documents count is returned.
-pub fn sample_documents( // Made public
+pub(crate) fn sample_documents(
     index_scheduler: &IndexScheduler,
     file_uuid: u128,
     document_id: usize,
@@ -245,7 +245,7 @@ pub fn sample_documents( // Made public
     (file, documents_count)
 }
 
-pub struct IndexSchedulerHandle { // Made struct public
+pub struct IndexSchedulerHandle {
     _tempdir: TempDir,
     index_scheduler: IndexScheduler,
     test_breakpoint_rcv: crossbeam_channel::Receiver<(Breakpoint, bool)>,
