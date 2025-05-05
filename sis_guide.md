@@ -238,6 +238,16 @@ crates/index-scheduler/src/scheduler/process_batch.rs
 cargo test -p index-scheduler -- msfj_sis_scheduler_e2e_tests::test_e2e_snapshot_create_import_verify
 ```
 
+### 9. Final Backend Review
+
+*   **Action**: Before proceeding to API implementation, review all the code added or modified in the previous steps (`fj_` prefixed functions/modules, new task types, scheduler modifications, tests).
+    *   Ensure adherence to the fork naming conventions (`fj_`, `msfj_sis_`).
+    *   Verify that error handling is consistent and uses appropriate error types.
+    *   Confirm that tests cover the intended functionality and edge cases described in the guide.
+    *   Check for any remaining TODOs or obvious cleanup opportunities.
+    *   Run all `msfj_sis_` tests one last time: `cargo test -p index-scheduler -- msfj_sis_ --nocapture`.
+*   **Goal**: Confirm the backend implementation is complete, correct according to the guide, and robust enough to serve as the foundation for the API layer.
+
 ## D. Error Handling Guide
 
 Follow these guidelines for handling errors related to the new snapshot tasks:
