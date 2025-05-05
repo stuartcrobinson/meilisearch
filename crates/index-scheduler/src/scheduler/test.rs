@@ -11,27 +11,19 @@ use meilisearch_types::tasks::{IndexSwap, KindWithContent};
 use roaring::RoaringBitmap;
 
 use std::fs::File;
-use std::io::Write;
-use std::path::PathBuf;
+// Removed unused imports: File, Write, PathBuf, fj_snapshot_utils, HashSet
 
-// Removed unused import: crate::error::Error;
-use crate::fj_snapshot_utils; // [meilisearchfj] Import snapshot utils
 use crate::insta_snapshot::snapshot_index_scheduler;
 use crate::test_utils::Breakpoint::*;
-// Import handle_tasks and TempIndex from the correct module if test_utils is indeed the source
-// If these are defined elsewhere (e.g., fj_test_utils), adjust the path accordingly.
-// Assuming they are in test_utils for now based on typical structure.
+// Use fj_test_utils for handle_tasks and TempIndex
+use crate::fj_test_utils::{handle_tasks, TempIndex};
 use crate::test_utils::{
-    handle_tasks, index_creation_task, read_json, replace_document_import_task, sample_documents,
-    TempIndex, // Keep TempIndex import assuming it's in test_utils
+    index_creation_task, read_json, replace_document_import_task, sample_documents,
 };
 // Imports moved up
-use crate::IndexScheduler; // Removed unused TaskId import
-// Removed unused Settings and Unchecked imports
-use meilisearch_types::tasks::{Details, Status};
-use milli::update::Setting;
-use meilisearch_types::settings::FilterableAttributesRule; // Import FilterableAttributesRule
-use std::collections::HashSet; // Import HashSet
+use crate::IndexScheduler;
+// Removed unused imports: Details, Status, Setting
+use milli::FilterableAttributesRule; // Import FilterableAttributesRule from milli
 
 #[test]
 fn insert_task_while_another_task_is_processing() {
@@ -951,21 +943,22 @@ fn create_and_list_index() {
 mod msfj_sis_scheduler_import_tests {
     use super::*; // Keep import from parent
     // Move necessary imports inside the module
-    use crate::test_utils::handle_tasks;
+    use crate::fj_test_utils::handle_tasks; // Use fj_test_utils
     use meilisearch_types::milli::vector::settings::{EmbedderSource, EmbeddingSettings};
-    use meilisearch_types::settings::SettingEmbeddingSettings; // Restore this import
+    // Removed unused import: SettingEmbeddingSettings
     use meilisearch_types::tasks::KindWithContent;
     use tempfile::tempdir;
     use std::collections::{BTreeMap, HashSet}; // Import BTreeMap and HashSet
     use big_s::S; // Import S
     use std::path::PathBuf; // Import PathBuf
     use std::fs::File; // Import File
-    use std::io::Write; // Import Write
-    use crate::{IndexScheduler, fj_snapshot_utils}; // Import IndexScheduler and fj_snapshot_utils
-    use crate::test_utils::index_creation_task; // Import index_creation_task
-    use meilisearch_types::tasks::{Details, Status}; // Import Details and Status
-    use meilisearch_types::settings::FilterableAttributesRule; // Import FilterableAttributesRule
-    use milli::update::Setting; // Import Setting
+    use std::io::Write;
+    use crate::{IndexScheduler, fj_snapshot_utils};
+    use crate::test_utils::index_creation_task;
+    use meilisearch_types::tasks::{Details, Status};
+    use milli::FilterableAttributesRule; // Import from milli
+    use milli::update::Setting;
+    use meilisearch_types::error::ErrorCode; // Import ErrorCode trait for error_code() method
 
     // Helper to create a valid snapshot for import tests
     // Moved inside the module
@@ -986,10 +979,8 @@ mod msfj_sis_scheduler_import_tests {
             &index,
             index_scheduler.indexer_config(),
         );
-        // Correctly collect into HashSet<String>
-        settings.set_filterable_fields(
-            vec!["name".to_string()].into_iter().collect::<HashSet<String>>(),
-        );
+        // Construct Vec<FilterableAttributesRule> directly
+        settings.set_filterable_fields(vec![FilterableAttributesRule::Field("name".to_string())]);
         settings.execute(|_| {}, || false).unwrap();
         wtxn.commit().unwrap();
 
@@ -1123,9 +1114,9 @@ mod msfj_sis_scheduler_import_tests {
         assert_eq!(imported_embedders.len(), 1);
         assert!(imported_embedders.iter().any(|c| c.name == "default"));
         let config = imported_embedders.iter().find(|c| c.name == "default").unwrap();
-        // Access fields from EmbeddingConfig, not EmbedderOptions directly
-        assert!(matches!(config.config.source, EmbedderSource::UserProvided));
-        assert_eq!(config.config.dimensions, Some(1));
+        // Access fields via embedder_options
+        assert!(matches!(config.config.embedder_options.source, EmbedderSource::UserProvided));
+        assert_eq!(config.config.embedder_options.dimensions, Some(1));
     }
 
     #[test]
@@ -1160,7 +1151,8 @@ mod msfj_sis_scheduler_import_tests {
         let task = index_scheduler.queue.tasks.get_task(&rtxn, task_id).unwrap().unwrap();
         assert_eq!(task.status, Status::Failed);
         assert!(task.error.is_some());
-        let error_code = task.error.as_ref().unwrap().error_code;
+        // Use error_code() method
+        let error_code = task.error.as_ref().unwrap().error_code();
         assert_eq!(error_code, meilisearch_types::error::Code::IndexAlreadyExists);
         match task.details {
             Some(Details::SingleIndexSnapshotImport { .. }) => {} // Expected structure
@@ -1190,7 +1182,8 @@ mod msfj_sis_scheduler_import_tests {
         let task = index_scheduler.queue.tasks.get_task(&rtxn, task_id).unwrap().unwrap();
         assert_eq!(task.status, Status::Failed);
         assert!(task.error.is_some());
-        let error_code = task.error.as_ref().unwrap().error_code;
+        // Use error_code() method
+        let error_code = task.error.as_ref().unwrap().error_code();
         // Depending on exact failure (non-existent vs outside dir), code might vary slightly
         assert!(matches!(error_code, meilisearch_types::error::Code::InvalidSnapshotPath | meilisearch_types::error::Code::SnapshotImportFailed));
     }
@@ -1222,7 +1215,8 @@ mod msfj_sis_scheduler_import_tests {
         let task = index_scheduler.queue.tasks.get_task(&rtxn, task_id).unwrap().unwrap();
         assert_eq!(task.status, Status::Failed);
         assert!(task.error.is_some());
-        let error_code = task.error.as_ref().unwrap().error_code;
+        // Use error_code() method
+        let error_code = task.error.as_ref().unwrap().error_code();
          // Expect SnapshotImportFailed wrapping the underlying format error
         assert_eq!(error_code, meilisearch_types::error::Code::SnapshotImportFailed);
     }
@@ -1278,7 +1272,8 @@ mod msfj_sis_scheduler_import_tests {
         let task = index_scheduler.queue.tasks.get_task(&rtxn, task_id).unwrap().unwrap();
         assert_eq!(task.status, Status::Failed);
         assert!(task.error.is_some());
-        let error_code = task.error.as_ref().unwrap().error_code;
+        // Use error_code() method
+        let error_code = task.error.as_ref().unwrap().error_code();
         assert_eq!(error_code, meilisearch_types::error::Code::SnapshotVersionMismatch);
     }
 }
