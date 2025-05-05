@@ -1014,10 +1014,14 @@ mod msfj_sis_scheduler_import_tests {
             &index,
             metadata,
             &snapshot_path,
-        )
-        .unwrap();
+        );
 
-        // Add assertion here to check immediately after creation
+        // Panic with detailed error if creation failed
+        creation_result.unwrap_or_else(|e| {
+            panic!("fj_snapshot_utils::create_index_snapshot failed for path {:?}: {}", snapshot_path, e);
+        });
+
+        // Add assertion here to check immediately after successful creation call
         assert!(snapshot_path.is_file(), "Snapshot file missing immediately after creation call: {:?}", snapshot_path);
 
         snapshot_path
