@@ -127,6 +127,16 @@ pub enum Error {
     AbortedTask,
     #[error("Snapshot creation failed for index `{index_uid}`: {source}")]
     SnapshotCreationFailed { index_uid: String, source: Box<dyn std::error::Error + Send + Sync> },
+    #[error("Invalid snapshot format found at path `{path}`.")]
+    InvalidSnapshotFormat { path: std::path::PathBuf },
+    #[error("Snapshot import failed for index `{target_index_uid}`: {source}")]
+    SnapshotImportFailed { target_index_uid: String, source: Box<dyn std::error::Error + Send + Sync> },
+    #[error("Target index `{target_index_uid}` already exists during snapshot import.")]
+    SnapshotImportTargetIndexExists { target_index_uid: String },
+    #[error("Snapshot version mismatch at path `{path}`: snapshot version is `{snapshot_version}`, instance version is `{current_version}`.")]
+    SnapshotVersionMismatch { path: std::path::PathBuf, snapshot_version: String, current_version: String },
+    #[error("Invalid snapshot path `{path}`. It must be within the configured snapshots directory.")]
+    InvalidSnapshotPath { path: std::path::PathBuf },
 
     #[error(transparent)]
     Dump(#[from] dump::Error),
@@ -293,7 +303,12 @@ impl ErrorCode for Error {
 
             // This one should never be seen by the end user
             Error::AbortedTask => Code::Internal,
-            Error::SnapshotCreationFailed { .. } => Code::SnapshotCreationFailed, // Already added, ensure it's correct
+            Error::SnapshotCreationFailed { .. } => Code::SnapshotCreationFailed,
+            Error::InvalidSnapshotFormat { .. } => Code::InvalidSnapshotFormat,
+            Error::SnapshotImportFailed { .. } => Code::SnapshotImportFailed,
+            Error::SnapshotImportTargetIndexExists { .. } => Code::IndexAlreadyExists,
+            Error::SnapshotVersionMismatch { .. } => Code::SnapshotVersionMismatch,
+            Error::InvalidSnapshotPath { .. } => Code::InvalidSnapshotPath,
 
             #[cfg(test)]
             Error::PlannedFailure => Code::Internal,

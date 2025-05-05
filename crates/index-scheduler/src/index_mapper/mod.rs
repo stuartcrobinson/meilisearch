@@ -10,16 +10,30 @@ use meilisearch_types::milli::database_stats::DatabaseStats;
 use meilisearch_types::milli::update::IndexerConfig;
 use meilisearch_types::milli::{FieldDistribution, Index};
 use serde::{Deserialize, Serialize};
+use meilisearch_types::settings::Settings;
+use serde::{Deserialize, Serialize};
 use time::OffsetDateTime;
 use tracing::error;
 use uuid::Uuid;
 
-use self::index_map::IndexMap;
+use self::index_map::{IndexMap, InsertionOutcome};
 use self::IndexStatus::{Available, BeingDeleted, Closing, Missing};
 use crate::uuid_codec::UuidCodec;
-use crate::{Error, IndexBudget, IndexSchedulerOptions, Result};
+use crate::{versioning, Error, IndexBudget, IndexSchedulerOptions, Result};
 
 mod index_map;
+
+/// Structure holding the deserialized content of `metadata.json` from a snapshot.
+#[derive(Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct ParsedMetadata {
+    pub meilisearch_version: String,
+    pub settings: Settings<meilisearch_types::settings::Unchecked>,
+    #[serde(with = "time::serde::rfc3339")]
+    pub created_at: OffsetDateTime,
+    #[serde(with = "time::serde::rfc3339")]
+    pub updated_at: OffsetDateTime,
+}
 
 /// The number of database used by index mapper
 const NUMBER_OF_DATABASES: u32 = 2;
@@ -530,5 +544,185 @@ impl IndexMapper {
 
     pub fn set_currently_updating_index(&self, index: Option<(String, Index)>) {
         *self.currently_updating_index.write().unwrap() = index;
+    }
+
+    /// Imports an index from a snapshot file.
+    ///
+    /// This method handles unpacking the snapshot, validating its contents,
+    /// creating the index directory, opening the index, and registering it
+    /// with the IndexMapper.
+    ///
+    /// # Arguments
+    ///
+    /// * `target_index_uid`: The desired user-facing name for the imported index.
+    /// * `snapshot_path`: The path to the snapshot file (`.snapshot.tar.gz`).
+    ///
+    /// # Returns
+    ///
+    /// A tuple containing the opened `Index` handle and the parsed metadata from the snapshot.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if:
+    /// * The `snapshot_path` is invalid or outside the configured snapshots directory.
+    /// * The `target_index_uid` already exists.
+    /// * The snapshot file is corrupted or has an invalid format.
+    /// * The snapshot version is incompatible with the current Meilisearch version.
+    /// * An I/O error occurs during unpacking or file operations.
+    /// * An internal error occurs within Heed or Milli.
+    pub fn import_index_from_snapshot(
+        &self,
+        target_index_uid: &str,
+        snapshot_path: &Path,
+    ) -> Result<(Index, ParsedMetadata)> {
+        // 1. Validate Request & Path
+        // Ensure snapshot_path is within the configured base_path/snapshots/
+        // For now, assume base_path is the parent of snapshots_path. A more robust check might be needed.
+        let snapshots_base_path = self.base_path.parent().ok_or_else(|| {
+            Error::InvalidSnapshotPath { path: snapshot_path.to_path_buf() }
+        })?; // Assuming data.ms/ is parent of indexes/
+        let snapshots_dir = snapshots_base_path.join("snapshots");
+
+        if !snapshot_path.starts_with(&snapshots_dir) || !snapshot_path.exists() {
+            return Err(Error::InvalidSnapshotPath { path: snapshot_path.to_path_buf() });
+        }
+
+        // Check if target_index_uid already exists
+        let rtxn = self.env.read_txn()?;
+        if self.index_exists(&rtxn, target_index_uid)? {
+            return Err(Error::SnapshotImportTargetIndexExists {
+                target_index_uid: target_index_uid.to_string(),
+            });
+        }
+        drop(rtxn); // Release read transaction before potential writes
+
+        // 2. Unpack & Validate Snapshot
+        // Create temporary directory within the main data path for atomicity
+        let temp_dir_base = self.base_path.parent().ok_or_else(|| {
+            Error::IoError(std::io::Error::new(
+                std::io::ErrorKind::NotFound,
+                "Could not determine parent directory for temporary snapshot import",
+            ))
+        })?;
+        let temp_dir = tempfile::Builder::new()
+            .prefix("tmp_snapshot_import_")
+            .tempdir_in(temp_dir_base)?;
+
+        let snapshot_file = fs::File::open(snapshot_path)?;
+        let mut archive = tar::Archive::new(flate2::read::GzDecoder::new(snapshot_file));
+        archive.unpack(temp_dir.path())?;
+
+        let data_mdb_path = temp_dir.path().join("data.mdb");
+        let metadata_path = temp_dir.path().join("metadata.json");
+
+        if !data_mdb_path.exists() || !metadata_path.exists() {
+            return Err(Error::InvalidSnapshotFormat { path: snapshot_path.to_path_buf() });
+        }
+
+        // 3. Parse Metadata & Version Check
+        let metadata_file = fs::File::open(&metadata_path)?;
+        let metadata: ParsedMetadata = serde_json::from_reader(metadata_file)
+            .map_err(|e| Error::InvalidSnapshotFormat { path: snapshot_path.to_path_buf() })?; // Consider a more specific error
+
+        let (current_major, current_minor, _) = versioning::VERSION_MAJOR_MINOR_PATCH;
+        let snapshot_version_str = &metadata.meilisearch_version;
+        let snapshot_version_parts: Vec<&str> = snapshot_version_str.split('.').collect();
+        if snapshot_version_parts.len() < 2 {
+            return Err(Error::SnapshotVersionMismatch {
+                path: snapshot_path.to_path_buf(),
+                snapshot_version: snapshot_version_str.clone(),
+                current_version: versioning::VERSION_STRING.to_string(),
+            });
+        }
+        let snapshot_major: u32 = snapshot_version_parts[0].parse().map_err(|_| {
+            Error::SnapshotVersionMismatch {
+                path: snapshot_path.to_path_buf(),
+                snapshot_version: snapshot_version_str.clone(),
+                current_version: versioning::VERSION_STRING.to_string(),
+            }
+        })?;
+        let snapshot_minor: u32 = snapshot_version_parts[1].parse().map_err(|_| {
+            Error::SnapshotVersionMismatch {
+                path: snapshot_path.to_path_buf(),
+                snapshot_version: snapshot_version_str.clone(),
+                current_version: versioning::VERSION_STRING.to_string(),
+            }
+        })?;
+
+        if snapshot_major != current_major || snapshot_minor != current_minor {
+            return Err(Error::SnapshotVersionMismatch {
+                path: snapshot_path.to_path_buf(),
+                snapshot_version: snapshot_version_str.clone(),
+                current_version: versioning::VERSION_STRING.to_string(),
+            });
+        }
+
+        // 4. Prepare Index Directory & Data
+        let new_uuid = Uuid::new_v4();
+        let index_path = self.base_path.join(new_uuid.to_string());
+        fs::create_dir_all(&index_path)?;
+        fs::rename(data_mdb_path, index_path.join("data.mdb"))?; // Move data.mdb
+
+        // 5. Register, Open, and Map Index
+        let mut wtxn = self.env.write_txn()?;
+        let mut index_map = self.index_map.write().unwrap(); // Lock the index map
+
+        // Open the index using milli::Index::new_with_creation_dates
+        let options = milli::heed::EnvOpenOptions::new();
+        let mut options = options.read_txn_without_tls();
+        options.map_size(crate::utils::clamp_to_page_size(self.index_base_map_size));
+        if self.enable_mdb_writemap {
+            unsafe { options.flags(milli::heed::EnvFlags::WRITE_MAP) };
+        }
+
+        let index = milli::Index::new_with_creation_dates(
+            options,
+            &index_path,
+            metadata.created_at,
+            metadata.updated_at,
+            false, // `creation` is false because we are importing existing data
+        )
+        .map_err(|e| Error::from_milli(e, Some(target_index_uid.to_string())))?;
+
+        // Update the mapping table
+        self.index_mapping.put(&mut wtxn, target_index_uid, &new_uuid)?;
+
+        // Insert into the LRU map using IndexMap::create logic adaptation
+        // We manually handle the insertion and potential eviction here as IndexMap::create
+        // assumes directory creation and initial index setup.
+        match index_map.available.insert(new_uuid, index.clone()) {
+            InsertionOutcome::InsertedNew => (), // Expected case
+            InsertionOutcome::Evicted(evicted_uuid, evicted_index) => {
+                // Use the existing close logic from IndexMap
+                index_map.close(evicted_uuid, evicted_index, self.enable_mdb_writemap, 0);
+            }
+            InsertionOutcome::Replaced(_) => {
+                // This should not happen due to the earlier check, but handle defensively
+                wtxn.abort(); // Abort transaction
+                drop(index_map); // Release lock
+                                 // Clean up created index directory? This path indicates a logic error.
+                return Err(Error::SnapshotImportFailed {
+                    target_index_uid: target_index_uid.to_string(),
+                    source: "Attempted to replace an existing index UUID in the map during import"
+                        .into(),
+                });
+            }
+        }
+
+        // Store initial stats (or stats from metadata if available?)
+        // For now, compute fresh stats after import.
+        let index_rtxn = index.read_txn()?;
+        let stats = crate::index_mapper::IndexStats::new(&index, &index_rtxn)
+            .map_err(|e| Error::from_milli(e, Some(target_index_uid.to_string())))?;
+        self.index_stats.put(&mut wtxn, &new_uuid, &stats)?;
+        drop(index_rtxn);
+
+        drop(index_map); // Release lock before committing
+
+        wtxn.commit()?; // Commit changes to mapping and stats
+
+        // 6. Cleanup is handled by tempfile's Drop trait
+
+        Ok((index, metadata))
     }
 }
