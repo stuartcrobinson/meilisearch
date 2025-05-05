@@ -167,37 +167,37 @@ pub fn create_index_snapshot(
     if let Some(parent_dir) = snapshot_filepath.parent() {
         tracing::info!(target: "snapshot_creation", "Attempting to sync parent directory: {:?}", parent_dir);
         match File::open(parent_dir) {
-    //         Ok(dir_handle) => {
-    //             if let Err(e) = dir_handle.sync_all() {
-    //                 tracing::warn!(target: "snapshot_creation", "Failed to sync parent directory {:?}: {}", parent_dir, e);
-    //                 // Continue anyway, maybe it wasn't necessary
-    //             } else {
-    //                 tracing::info!(target: "snapshot_creation", "Successfully synced parent directory");
-    //             }
-    //             drop(dir_handle); // Close directory handle
-    //         }
-    //         Err(e) => {
-    //             tracing::warn!(target: "snapshot_creation", "Failed to open parent directory {:?} for syncing: {}", parent_dir, e);
-    //             // Continue anyway
-    //         }
-    //     }
-    // } else {
-    //     tracing::warn!(target: "snapshot_creation", "Could not get parent directory for snapshot path: {:?}", snapshot_filepath);
-    // }
-    //
-    // // Final attempt to sync the data to disk using File::sync_data
-    // match File::open(&snapshot_filepath) {
-    //     Ok(file_handle) => {
-    //         if let Err(e) = file_handle.sync_data() {
-    //             tracing::warn!(target: "snapshot_creation", "Failed to sync_data for snapshot file {:?}: {}", snapshot_filepath, e);
-    //             // Continue anyway
-    //         } else {
-    //             tracing::info!(target: "snapshot_creation", "Successfully sync_data for snapshot file");
-    //         }
-    //         drop(file_handle); // Close the handle
-    //     }
-    //     Err(e) => {
-    //          tracing::warn!(target: "snapshot_creation", "Failed to re-open snapshot file {:?} for sync_data: {}", snapshot_filepath, e);
+            Ok(dir_handle) => {
+                if let Err(e) = dir_handle.sync_all() {
+                    tracing::warn!(target: "snapshot_creation", "Failed to sync parent directory {:?}: {}", parent_dir, e);
+                    // Continue anyway, maybe it wasn't necessary
+                } else {
+                    tracing::info!(target: "snapshot_creation", "Successfully synced parent directory");
+                }
+                drop(dir_handle); // Close directory handle
+            }
+            Err(e) => {
+                tracing::warn!(target: "snapshot_creation", "Failed to open parent directory {:?} for syncing: {}", parent_dir, e);
+                // Continue anyway
+            }
+        }
+    } else {
+        tracing::warn!(target: "snapshot_creation", "Could not get parent directory for snapshot path: {:?}", snapshot_filepath);
+    }
+
+    // Final attempt to sync the data to disk using File::sync_data
+    match File::open(&snapshot_filepath) {
+        Ok(file_handle) => {
+            if let Err(e) = file_handle.sync_data() {
+                tracing::warn!(target: "snapshot_creation", "Failed to sync_data for snapshot file {:?}: {}", snapshot_filepath, e);
+                // Continue anyway
+            } else {
+                tracing::info!(target: "snapshot_creation", "Successfully sync_data for snapshot file");
+            }
+            drop(file_handle); // Close the handle
+        }
+        Err(e) => {
+             tracing::warn!(target: "snapshot_creation", "Failed to re-open snapshot file {:?} for sync_data: {}", snapshot_filepath, e);
              // Continue anyway
         }
     }
