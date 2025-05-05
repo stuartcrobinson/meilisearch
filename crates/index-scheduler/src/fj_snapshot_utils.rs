@@ -112,6 +112,29 @@ pub fn create_index_snapshot(
     drop(file); // Ensure file handle is closed
     tracing::info!(target: "snapshot_creation", "Closed snapshot file handle");
 
+    // Attempt to sync the parent directory as well
+    if let Some(parent_dir) = snapshot_filepath.parent() {
+        tracing::info!(target: "snapshot_creation", "Attempting to sync parent directory: {:?}", parent_dir);
+        match File::open(parent_dir) {
+            Ok(dir_handle) => {
+                if let Err(e) = dir_handle.sync_all() {
+                    tracing::warn!(target: "snapshot_creation", "Failed to sync parent directory {:?}: {}", parent_dir, e);
+                    // Continue anyway, maybe it wasn't necessary
+                } else {
+                    tracing::info!(target: "snapshot_creation", "Successfully synced parent directory");
+                }
+                drop(dir_handle); // Close directory handle
+            }
+            Err(e) => {
+                tracing::warn!(target: "snapshot_creation", "Failed to open parent directory {:?} for syncing: {}", parent_dir, e);
+                // Continue anyway
+            }
+        }
+    } else {
+        tracing::warn!(target: "snapshot_creation", "Could not get parent directory for snapshot path: {:?}", snapshot_filepath);
+    }
+
+
     // Verification moved to the caller (`create_test_snapshot`)
 
     // Temp dir is automatically cleaned up when `temp_dir` goes out of scope here.
