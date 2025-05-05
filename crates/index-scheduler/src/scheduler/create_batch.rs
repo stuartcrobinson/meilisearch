@@ -561,13 +561,40 @@ impl IndexScheduler {
         let index_name = if let Some(&index_name) = task.indexes().first() {
             index_name
         } else {
-            assert!(matches!(&task.kind, KindWithContent::IndexSwap { swaps } if swaps.is_empty()));
-            current_batch.processing(Some(&mut task));
-            current_batch.reason(BatchStopReason::TaskCannotBeBatched {
-                kind: Kind::IndexSwap,
-                id: task.uid,
-            });
-            return Ok(Some((Batch::IndexSwap { task }, current_batch)));
+            // Handle tasks without a direct index association (empty swap or import)
+            match &task.kind {
+                KindWithContent::IndexSwap { swaps } if swaps.is_empty() => {
+                    current_batch.processing(Some(&mut task));
+                    current_batch.reason(BatchStopReason::TaskCannotBeBatched {
+                        kind: Kind::IndexSwap,
+                        id: task.uid,
+                    });
+                    return Ok(Some((Batch::IndexSwap { task }, current_batch)));
+                }
+                KindWithContent::SingleIndexSnapshotImport { source_snapshot_path, target_index_uid } => {
+                    current_batch.processing(Some(&mut task));
+                    current_batch.reason(BatchStopReason::TaskCannotBeBatched {
+                        kind: Kind::SingleIndexSnapshotImport,
+                        id: task.uid,
+                    });
+                    return Ok(Some((
+                        Batch::SingleIndexSnapshotImport {
+                            source_snapshot_path: source_snapshot_path.clone(),
+                            target_index_uid: target_index_uid.clone(),
+                            task,
+                        },
+                        current_batch,
+                    )));
+                }
+                _ => {
+                    // This case should ideally not be reached if task.indexes() logic is correct
+                    // for all task types. Panic if an unexpected task type appears here.
+                    panic!(
+                        "Unexpected task type {:?} without index UID in batch creation.",
+                        task.kind.as_kind()
+                    );
+                }
+            }
         };
 
         let index_already_exists = self.index_mapper.exists(rtxn, index_name)?;
