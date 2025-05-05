@@ -684,22 +684,34 @@ impl IndexMapper {
         let snapshot_version_str = &metadata.meilisearch_version;
         let snapshot_version_parts: Vec<&str> = snapshot_version_str.split('.').collect();
         // Construct current version string for comparison
-        let current_version_string = format!("{}.{}.{}", VERSION_MAJOR, VERSION_MINOR, VERSION_PATCH);
+        let current_version_string = format!("{}.{}.{}", VERSION_MAJOR, VERSION_MINOR, VERSION_PATCH); // Use parsed patch
+
+        // Add logging here
+        tracing::info!(target: "snapshot_import", "Version Check: Snapshot='{}', Current='{}'", snapshot_version_str, current_version_string);
+        tracing::info!(target: "snapshot_import", "Parsed Versions: Snapshot Major={}, Minor={:?}. Current Major={}, Minor={}",
+                       snapshot_version_parts.get(0).unwrap_or(&"?"),
+                       snapshot_version_parts.get(1), // Log minor part before parsing
+                       current_major, current_minor);
+
+
         if snapshot_version_parts.len() < 2 {
+            tracing::error!(target: "snapshot_import", "Version Check Failed: Snapshot version has too few parts.");
             return Err(Error::SnapshotVersionMismatch {
                 path: snapshot_path.to_path_buf(),
                 snapshot_version: snapshot_version_str.clone(),
                 current_version: current_version_string,
             });
         }
-        let snapshot_major: u32 = snapshot_version_parts[0].parse().map_err(|_| {
+        let snapshot_major: u32 = snapshot_version_parts[0].parse().map_err(|e| { // Add error logging
+            tracing::error!(target: "snapshot_import", "Version Check Failed: Could not parse snapshot major version: {}", e);
             Error::SnapshotVersionMismatch {
                 path: snapshot_path.to_path_buf(),
                 snapshot_version: snapshot_version_str.clone(),
                 current_version: current_version_string.clone(),
             }
         })?;
-        let snapshot_minor: u32 = snapshot_version_parts[1].parse().map_err(|_| {
+        let snapshot_minor: u32 = snapshot_version_parts[1].parse().map_err(|e| { // Add error logging
+             tracing::error!(target: "snapshot_import", "Version Check Failed: Could not parse snapshot minor version: {}", e);
             Error::SnapshotVersionMismatch {
                 path: snapshot_path.to_path_buf(),
                 snapshot_version: snapshot_version_str.clone(),
@@ -707,13 +719,19 @@ impl IndexMapper {
             }
         })?;
 
+        tracing::info!(target: "snapshot_import", "Comparing Parsed Versions: Snapshot Major={}, Minor={}. Current Major={}, Minor={}",
+                       snapshot_major, snapshot_minor, current_major, current_minor);
+
         if snapshot_major != current_major || snapshot_minor != current_minor {
+             tracing::error!(target: "snapshot_import", "Version Check Failed: Major or Minor version mismatch.");
             return Err(Error::SnapshotVersionMismatch {
                 path: snapshot_path.to_path_buf(),
                 snapshot_version: snapshot_version_str.clone(),
                 current_version: current_version_string,
             });
         }
+
+        tracing::info!(target: "snapshot_import", "Version Check Passed."); // Log success
 
         // 4. Prepare Index Directory & Data
         let new_uuid = Uuid::new_v4();
