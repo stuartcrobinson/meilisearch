@@ -296,3 +296,41 @@ errors become stubborn.
 TODO:  add a requirement that for each implementation step, we take a few steps to review everything newly written for for accuracy and reasonablenes and good software practices, and that it follows the rest of this sis_guide.md . and then double check that any before writing the tests and moving on
 
 NOTE:  when the AI agent interacts with the human, it should avoid pleasantries whenever possible.  no need for thank you. we want the conversation to be efficient and concise.
+
+
+## E. Development Workflow Notes
+
+### Code Changes:
+
+Do not generate any SEARCH/REPLACE blocks or suggest code modifications for any step until explicitly asked by the user to do so for that specific step.
+
+
+### Troubleshooting:
+
+When encountering persistent compiler errors (like type mismatches, unresolved paths, or missing methods), avoid excessive trial-and-error. Instead, **prioritize understanding the involved types and interfaces.** Ask the AI assistant to show the definitions of relevant structs, enums, traits, and functions. Examine their fields (public vs. private), methods, and implemented traits. Additionally, request examples of similar code usage elsewhere in the Meilisearch codebase. This direct inspection often reveals the root cause (e.g., incorrect type usage, privacy issues, missing trait implementations, or incorrect method calls) much faster than repeated code change attempts.
+
+When the AI LLM coder (like aider) is trying to debug and fix errors, it should feel encouraged to ask to look at any other files that might be helpful.
+
+Debugging:
+
+ 1 Look at Definitions Sooner: When facing persistent type errors (E0223, E0308, E0433, E0599) or ambiguity, don't spend too long trying path        
+   variations. Ask to see the definition of the relevant struct/enum/trait and the function/method being called much earlier. This would have quickly
+   revealed that EmbeddingSettings was a struct and that milli::OrderBy was the wrong enum.                                                          
+ 2 Verify Re-exports: When using paths like crate::some_module::Type, be mindful that some_module might be a re-export. If errors persist, ask to see
+   the lib.rs or mod.rs file where the re-export occurs (pub use ...) and potentially the lib.rs of the original crate to confirm exactly which type 
+   is being re-exported, especially if names might collide (like OrderBy).                                                                           
+ 3 Trust Specific Error Codes (Sometimes): While E0599 was misleading due to the underlying E0223, the E0308 (mismatched types) and E0433 (failed to 
+   resolve path) errors were quite accurate once the major ambiguity was gone. Pay close attention to the expected vs. found types in E0308.         
+ 4 Look for Examples: Yes, being more aggressive about asking for examples of similar code elsewhere in the Meilisearch codebase would likely have   
+   shown the correct way to construct EmbeddingSettings or set the sort_facet_values_by option much faster. Existing tests or core logic often       
+   provide the best patterns.                                                                                                                        
+ 5 Clean Builds: While it didn't solve the core issue here, running cargo clean periodically during complex debugging can rule out stale build       
+   artifacts causing strange behavior.                                                                                                               
+
+When debugging persistent test failures, avoid sequential trial-and-error fixes. Instead, adopt a broader diagnostic approach. Formulate multiple hypotheses for the root cause (e.g., path issues, permissions, resource lifecycles, library interactions). Instrument the code around the failure point with detailed logging, assertions, and contextual error messages (`map_err`) to pinpoint the exact failure location and state. Verify assumptions, like directory existence or file accessibility, just before the failing operation. This systematic approach helps identify the true cause, such as premature temporary file cleanup or incorrect path handling, more efficiently than isolated fixes.
+
+The key is to reduce assumptions and verify types and paths by looking directly at the relevant source code definitions and re-exports when compiler 
+errors become stubborn.                                                                                                                              
+
+
+TODO:  add a requirement that for each implementation step, we take a few steps to review everything newly written for for accuracy and reasonablenes and good software practices, and that it follows the rest of this sis_guide.md . and then double check that any before writing the tests and moving on
