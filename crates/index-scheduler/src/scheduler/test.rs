@@ -1513,8 +1513,8 @@ mod msfj_sis_scheduler_import_tests {
         // sort_facet_values_by.insert("size".to_string(), dbg!(milli::OrderBy::Asc)); // Example check
         // Correct OrderBy variant usage (use Count to match assertion)
         sort_facet_values_by.insert("size".to_string(), OrderBy::Count);
-        // Use BTreeMap directly with OrderByMap::from
-        settings.set_sort_facet_values_by(OrderByMap::from(sort_facet_values_by)); // Use imported OrderByMap
+        // Convert BTreeMap using FromIterator
+        settings.set_sort_facet_values_by(sort_facet_values_by.into_iter().collect::<OrderByMap>()); // Use FromIterator
 
         settings.set_pagination_max_total_hits(500);
 
