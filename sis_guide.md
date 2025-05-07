@@ -281,38 +281,52 @@ This section outlines the steps to expose the single-index snapshot functionalit
 
 ### 11. Implement API Handlers
 
-*   **Files**: `crates/meilisearch/src/routes/snapshot.rs` (or new `fj_snapshot.rs`).
+*   **Files**: `crates/meilisearch/src/routes/snapshot.rs` (if modifying existing) or `crates/meilisearch/src/routes/fj_snapshot.rs` (if creating new).
 *   **Action**:
     *   **Creation Handler**:
-        *   Create a new `async fn fj_create_index_snapshot(index_scheduler: Data<IndexScheduler>, index_uid: Path<String>) -> Result<Json<TaskInfo>, ResponseError>`.
+        *   In the chosen snapshot route file (e.g., `fj_snapshot.rs` or `snapshot.rs`), create `pub async fn fj_create_index_snapshot(index_scheduler: GuardedData<ActionPolicy<{ actions::SNAPSHOTS_CREATE }>, Data<IndexScheduler>>, index_uid: web::Path<String>, req: HttpRequest, opt: web::Data<Opt>) -> Result<Json<SummarizedTaskView>, ResponseError>`.
         *   Extract `index_uid`.
         *   Construct `KindWithContent::SingleIndexSnapshotCreation`.
         *   Call `index_scheduler.register(task)`.
         *   Return the resulting `TaskInfo`.
     *   **Import Handler**:
-        *   Create a new `async fn fj_import_index_snapshot(index_scheduler: Data<IndexScheduler>, payload: Json<SingleIndexSnapshotImportPayload>) -> Result<Json<TaskInfo>, ResponseError>`.
-        *   Deserialize and validate the payload (`source_snapshot_filename`, `target_index_uid`).
+        *   In the chosen snapshot route file (e.g., `fj_snapshot.rs` or `snapshot.rs`), create `pub async fn fj_import_index_snapshot(index_scheduler: GuardedData<ActionPolicy<{ actions::SNAPSHOTS_CREATE }>, Data<IndexScheduler>>, payload: web::Json<FjSingleIndexSnapshotImportPayload>, req: HttpRequest, opt: web::Data<Opt>) -> Result<Json<SummarizedTaskView>, ResponseError>`.
+            *   (Note: Added `GuardedData` for auth, `Data<Opt>` for `snapshot_dir`, `HttpRequest` for `get_task_id` and `is_dry_run`.)
+        *   Deserialize and validate the payload.
         *   **Security Check**:
-            *   Validate `source_snapshot_filename`: Ensure it's a valid filename and doesn't contain path traversal elements (like `..`).
-            *   Construct the full `source_snapshot_path` by joining the configured `snapshots_path` (from `Opt`) with the validated `source_snapshot_filename`.
-            *   Ensure the canonicalized `source_snapshot_path` still resides within the allowed `snapshots_path` directory.
-            *   Fail with an appropriate `ResponseError` (e.g., `invalid_snapshot_path`) if any validation fails.
-        *   Construct `KindWithContent::SingleIndexSnapshotImport` using the validated full path.
-        *   Call `index_scheduler.register(task)`.
-        *   Return the resulting `TaskInfo`.
+            *   Validate `payload.source_snapshot_filename`: Ensure it's a valid filename (e.g., ends with `.snapshot.tar.gz` or similar, no path traversal elements like `..`). Use `meilisearch_types::error::Code::InvalidSnapshotPath` for errors.
+            *   Construct the full `source_snapshot_path` by joining `opt.snapshot_dir` with the validated `payload.source_snapshot_filename`.
+            *   Canonicalize `source_snapshot_path`. Ensure it still resides within `opt.snapshot_dir`.
+            *   Fail with `ResponseError::from_msg(..., Code::InvalidSnapshotPath)` if any validation fails.
+        *   Construct `KindWithContent::SingleIndexSnapshotImport { source_snapshot_path: source_snapshot_path.to_string_lossy().into_owned(), target_index_uid: payload.target_index_uid }`.
+        *   Use `get_task_id(&req, &opt)?` and `is_dry_run(&req, &opt)?`.
+        *   Call `index_scheduler.register(task, uid, dry_run)`.
+        *   Return the resulting `SummarizedTaskView`.
 *   **Testing (TDD)**: Write unit tests for the handlers, mocking `IndexScheduler::register` to verify that it's called with the correct `KindWithContent` based on input. Test payload validation and path security checks.
 
 ### 12. Register API Routes
 
-*   **File**: `crates/meilisearch/src/routes/mod.rs`.
+*   **File**: `crates/meilisearch/src/routes/mod.rs`, `crates/meilisearch/src/routes/snapshot.rs` (or `fj_snapshot.rs`), `crates/meilisearch/src/routes/indexes/mod.rs`.
 *   **Action**:
-    *   Import the new handler functions.
-    *   Add the new routes (`/indexes/{index_uid}/snapshots` and `/snapshots/import`) to the `Router` configuration, likely within the `snapshots` service scope or a relevant index scope.
-*   **Testing (TDD)**: Manual verification or integration tests (Step 13).
+    *   If a new `fj_snapshot.rs` file is created for the handlers:
+        *   Define a `configure` function within it (e.g., `pub fn configure_fj_snapshot_routes(cfg: &mut web::ServiceConfig)`).
+        *   Register `fj_import_index_snapshot` under `/import` within this `configure` function.
+        *   Add `fj_create_index_snapshot` and `fj_import_index_snapshot` to an `utoipa::OpenApi` derive on a new struct (e.g., `FjSnapshotApi`) within `fj_snapshot.rs`.
+    *   If modifying existing `routes/snapshot.rs`:
+        *   Add `fj_import_index_snapshot` to its `configure` function under `/import`.
+        *   Add `fj_create_index_snapshot` and `fj_import_index_snapshot` to the existing `SnapshotApi`'s `utoipa::OpenApi` derive.
+    *   In `routes/indexes/mod.rs`:
+        *   Import `fj_create_index_snapshot` (from `crate::routes::snapshot` or `crate::routes::fj_snapshot`).
+        *   In the `configure` function (likely within `web::scope("/{index_uid}")`), add a route for `fj_create_index_snapshot` under `/snapshots` (e.g., `index_scope.service(web::resource("/snapshots").route(web::post().to(SeqHandler(fj_create_index_snapshot))))`).
+    *   In `routes/mod.rs`:
+        *   If a new `fj_snapshot.rs` with its own `configure_fj_snapshot_routes` and `FjSnapshotApi` was created:
+            *   Call `cfg.service(web::scope("/snapshots").configure(crate::routes::fj_snapshot::configure_fj_snapshot_routes))` to mount the new routes.
+            *   Add `FjSnapshotApi` to the `MeilisearchApi`'s `nest` macro.
+*   **Testing (TDD)**: Manual verification by running the server and checking OpenAPI docs, or proceed to integration tests (Step 13).
 
 ### 13. Add API Integration Tests
 
-*   **Files**: `meilisearch/tests/snapshots/mod.rs` (or a new `fj_snapshot.rs` test file).
+*   **Files**: `meilisearch/tests/snapshots/mod.rs` (Create this file and the `snapshots` directory if they don't exist) or `meilisearch/tests/fj_snapshot_api_tests.rs` (Create this file at the root of `meilisearch/tests/`).
 *   **Action**:
     *   Write integration tests using the Meilisearch test framework (`Client`).
     *   **Creation Test**:
