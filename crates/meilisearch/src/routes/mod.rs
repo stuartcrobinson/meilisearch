@@ -47,8 +47,8 @@ use crate::search::{
 use crate::search_queue::SearchQueue;
 use crate::Opt;
 // [meilisearchfj] Import new snapshot payload type
-use meilisearch_types::snapshot::FjSingleIndexSnapshotImportPayload;
-
+use meilisearch_types::fj_snapshot::FjSingleIndexSnapshotImportPayload;
+    
 const PAGINATION_DEFAULT_LIMIT: usize = 20;
 const PAGINATION_DEFAULT_LIMIT_FN: fn() -> usize = || 20;
 
