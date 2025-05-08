@@ -1,11 +1,11 @@
-use actix_web::StatusCode;
-use meilisearch_types::snapshot::FjSingleIndexSnapshotImportPayload;
-use meilisearch_types::tasks::{Details, Status, TaskId};
-use serde_json::json;
-use std::fs;
+use actix_web::http::StatusCode;
+use meilisearch_types::fj_snapshot::FjSingleIndexSnapshotImportPayload;
+// Unused imports Details, Status, TaskId removed.
+// Unused import serde_json::json removed; common::json! will be used.
+// Unused import std::fs removed.
 use tempfile::TempDir;
 
-// Assuming Server, Client, default_settings_for_test, Value are available via common
+// Assuming Server, Client, default_settings, Value are available via common
 // e.g. use crate::common::{Server, Client, default_settings_for_test, Value};
 // For the purpose of this standalone file, we'll assume they are brought into scope by a higher-level `mod.rs`
 // or that the test runner handles this. If these tests were in `meilisearch/tests/tests/`
@@ -22,16 +22,19 @@ use tempfile::TempDir;
 
 // Correctly include and use the common test utilities for an integration test file.
 mod common;
-use common::{default_settings, Server, Value, Owned};
+// Unused import Value removed from this line.
+use common::{default_settings, json, Server, Owned, GetAllDocumentsOptions};
 
 async fn create_server_with_temp_snapshots_path() -> (Server<Owned>, TempDir) {
     let snapshot_dir = TempDir::new().expect("Failed to create temp snapshot directory");
-    let mut opt = default_settings();
+    // Provide the required directory argument to default_settings
+    let mut opt = default_settings(snapshot_dir.path());
     opt.snapshot_dir = snapshot_dir.path().to_path_buf();
     // In a real scenario, ensure the feature is enabled if behind a flag
     // opt.experimental_enable_single_index_snapshots = true;
 
-    let server = Server::new_with_options(opt).await;
+    // Unwrap the Result from Server::new_with_options
+    let server = Server::new_with_options(opt).await.expect("Failed to create server");
     (server, snapshot_dir)
 }
 
@@ -41,12 +44,14 @@ async fn test_single_index_snapshot_creation_success() {
     let index_uid = "test_creation_success";
 
     // 1. Create a test index
-    let (response, code) = server.create_index_with_uid(index_uid).await;
+    // Use server.create_index(uid, primary_key_option)
+    let (response, code) = server.create_index(index_uid, None).await;
     assert_eq!(code, StatusCode::ACCEPTED, "Failed to create index: {}", response);
     let task_id = response.uid();
     server.wait_task(task_id).await;
 
     // Add some documents
+    // Use common::json! macro
     let documents = json!([
         { "id": 1, "field1": "hello" },
         { "id": 2, "field1": "world" }
@@ -58,6 +63,7 @@ async fn test_single_index_snapshot_creation_success() {
 
     // 2. Call POST /indexes/{index_uid}/snapshots
     let snapshot_url = format!("/indexes/{}/snapshots", index_uid);
+    // Use common::json! macro and wrap with common::Value
     let (response, code) = server.service.post(snapshot_url, json!({})).await;
 
     // 3. Verify 202 Accepted and valid SummarizedTaskView
@@ -85,22 +91,26 @@ async fn test_single_index_snapshot_import_success() {
     let target_index_uid = "test_import_target";
 
     // 1. Create a source index and snapshot it
-    let (response, code) = server.create_index_with_uid(source_index_uid).await;
+    // Use server.create_index(uid, primary_key_option)
+    let (response, code) = server.create_index(source_index_uid, None).await;
     assert_eq!(code, StatusCode::ACCEPTED);
     server.wait_task(response.uid()).await;
 
     let source_index = server.index(source_index_uid);
+    // Use common::json! macro
     let documents = json!([ { "id": 1, "data": "content1" }, { "id": 2, "data": "content2" } ]);
     let (response, code) = source_index.add_documents(documents.clone(), Some("id")).await;
     assert_eq!(code, StatusCode::ACCEPTED);
     server.wait_task(response.uid()).await;
 
+    // Use common::json! macro
     let settings_payload = json!({ "displayedAttributes": ["id", "data"], "searchableAttributes": ["data"] });
     let (response, code) = source_index.update_settings(settings_payload.clone()).await;
     assert_eq!(code, StatusCode::ACCEPTED);
     server.wait_task(response.uid()).await;
 
     let snapshot_url = format!("/indexes/{}/snapshots", source_index_uid);
+    // Use common::json! macro and wrap with common::Value
     let (response, code) = server.service.post(snapshot_url, json!({})).await;
     assert_eq!(code, StatusCode::ACCEPTED);
     let creation_task_response = server.wait_task(response.uid()).await;
@@ -114,7 +124,8 @@ async fn test_single_index_snapshot_import_success() {
         source_snapshot_filename: snapshot_filename.clone(),
         target_index_uid: target_index_uid.to_string(),
     };
-    let (response, code) = server.service.post("/snapshots/import", serde_json::to_value(import_payload).unwrap()).await;
+    // Wrap serde_json::Value with common::Value
+    let (response, code) = server.service.post("/snapshots/import", common::Value(serde_json::to_value(import_payload).unwrap())).await;
 
     // 3. Verify 202 Accepted
     assert_eq!(code, StatusCode::ACCEPTED, "Import request failed: {}", response);
@@ -129,11 +140,13 @@ async fn test_single_index_snapshot_import_success() {
     let (_target_index_info, code) = target_index.get().await; // get_index info
     assert_eq!(code, StatusCode::OK, "Target index not found after import");
 
-    let (target_docs, code) = target_index.get_all_documents().await;
+    // Provide default options for get_all_documents
+    let (target_docs, code) = target_index.get_all_documents(GetAllDocumentsOptions::default()).await;
     assert_eq!(code, StatusCode::OK);
     assert_eq!(target_docs["results"].as_array().unwrap().len(), 2);
 
-    let (target_settings, code) = target_index.get_settings().await;
+    // Use target_index.settings()
+    let (target_settings, code) = target_index.settings().await;
     assert_eq!(code, StatusCode::OK);
     assert_eq!(target_settings["displayedAttributes"], settings_payload["displayedAttributes"]);
     assert_eq!(target_settings["searchableAttributes"], settings_payload["searchableAttributes"]);
@@ -146,10 +159,12 @@ async fn test_single_index_snapshot_import_target_exists() {
     let target_index_uid = "import_err_target_already_exists";
 
     // Create source index and snapshot
-    let (task_response, code) = server.create_index_with_uid(source_index_uid).await;
+    // Use server.create_index(uid, primary_key_option)
+    let (task_response, code) = server.create_index(source_index_uid, None).await;
     assert_eq!(code, StatusCode::ACCEPTED);
     server.wait_task(task_response.uid()).await;
     let snapshot_url = format!("/indexes/{}/snapshots", source_index_uid);
+    // Use common::json! macro and wrap with common::Value
     let (response, code) = server.service.post(snapshot_url, json!({})).await;
     assert_eq!(code, StatusCode::ACCEPTED);
     let creation_task_response = server.wait_task(response.uid()).await;
@@ -157,7 +172,8 @@ async fn test_single_index_snapshot_import_target_exists() {
     let snapshot_filename = format!("{}-{}.snapshot.tar.gz", source_index_uid, snapshot_uid);
 
     // Create target index (so it already exists)
-    let (task_response, code) = server.create_index_with_uid(target_index_uid).await;
+    // Use server.create_index(uid, primary_key_option)
+    let (task_response, code) = server.create_index(target_index_uid, None).await;
     assert_eq!(code, StatusCode::ACCEPTED);
     server.wait_task(task_response.uid()).await;
 
@@ -165,7 +181,8 @@ async fn test_single_index_snapshot_import_target_exists() {
         source_snapshot_filename: snapshot_filename,
         target_index_uid: target_index_uid.to_string(),
     };
-    let (response, code) = server.service.post("/snapshots/import", serde_json::to_value(import_payload).unwrap()).await;
+    // Wrap serde_json::Value with common::Value
+    let (response, code) = server.service.post("/snapshots/import", common::Value(serde_json::to_value(import_payload).unwrap())).await;
     assert_eq!(code, StatusCode::ACCEPTED);
 
     let task_response = server.wait_task(response.uid()).await;
@@ -184,7 +201,8 @@ async fn test_single_index_snapshot_import_source_not_found() {
         source_snapshot_filename: non_existent_snapshot_filename.to_string(),
         target_index_uid: target_index_uid.to_string(),
     };
-    let (response, code) = server.service.post("/snapshots/import", serde_json::to_value(import_payload).unwrap()).await;
+    // Wrap serde_json::Value with common::Value
+    let (response, code) = server.service.post("/snapshots/import", common::Value(serde_json::to_value(import_payload).unwrap())).await;
     assert_eq!(code, StatusCode::ACCEPTED);
 
     let task_response = server.wait_task(response.uid()).await;
@@ -200,6 +218,7 @@ async fn test_single_index_snapshot_import_invalid_payload() {
     let (server, _snapshot_temp_dir) = create_server_with_temp_snapshots_path().await;
 
     // Missing source_snapshot_filename
+    // Use common::json! macro
     let (response, code) = server.service.post("/snapshots/import", json!({ "target_index_uid": "test_target" })).await;
     assert_eq!(code, StatusCode::BAD_REQUEST, "Response: {}", response);
     assert_eq!(response["code"], "missing_field", "Response: {}", response); // deserr typically gives "missing_field"
@@ -207,6 +226,7 @@ async fn test_single_index_snapshot_import_invalid_payload() {
 
 
     // Missing target_index_uid
+    // Use common::json! macro
     let (response, code) = server.service.post("/snapshots/import", json!({ "source_snapshot_filename": "test.snapshot.tar.gz" })).await;
     assert_eq!(code, StatusCode::BAD_REQUEST, "Response: {}", response);
     assert_eq!(response["code"], "missing_field", "Response: {}", response);
@@ -214,6 +234,7 @@ async fn test_single_index_snapshot_import_invalid_payload() {
 
 
     // Invalid target_index_uid format (e.g., contains spaces)
+    // Use common::json! macro
     let (response, code) = server.service.post("/snapshots/import", json!({
         "source_snapshot_filename": "test.snapshot.tar.gz",
         "target_index_uid": "invalid uid with spaces"
@@ -237,7 +258,8 @@ async fn test_single_index_snapshot_import_invalid_filename_path_traversal() {
     // If the check is deferred to the scheduler, the task would fail.
     // The guide's Step 5 (IndexMapper) also mentions validating snapshot_path.
     // Let's assume the task gets enqueued and then fails due to path validation in the scheduler.
-    let (response, code) = server.service.post("/snapshots/import", serde_json::to_value(import_payload).unwrap()).await;
+    // Wrap serde_json::Value with common::Value
+    let (response, code) = server.service.post("/snapshots/import", common::Value(serde_json::to_value(import_payload).unwrap())).await;
     assert_eq!(code, StatusCode::ACCEPTED, "Import task for path traversal should be enqueued: {}", response);
 
     let task_response = server.wait_task(response.uid()).await;
