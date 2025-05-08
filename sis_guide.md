@@ -267,7 +267,7 @@ This section outlines the steps to expose the single-index snapshot functionalit
 *   **Action**:
     *   **Payload Struct**: Define `SingleIndexSnapshotImportPayload` in `meilisearch-types/src/snapshot.rs`.
         *   Fields: `source_snapshot_filename: String`, `target_index_uid: String`.
-        *   Add necessary `serde` derives (`Deserialize`).
+        *   Add necessary `serde` derives (`Deserialize`, `Serialize`).
     *   **Creation Route**: Define a `POST` route, e.g., `/indexes/{index_uid}/snapshots`.
         *   No request body needed.
         *   Response body: Standard `SummarizedTaskView`.
