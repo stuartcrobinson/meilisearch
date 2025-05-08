@@ -397,6 +397,9 @@ cargo test -p meilisearch --lib -- routes::fj_snapshot::msfj_sis_api_handler_tes
             *   Nest `FjSnapshotApi`: `(path = "/snapshots", api = crate::routes::fj_snapshot::FjSnapshotApi)`.
             *   Ensure `FjSingleIndexSnapshotImportPayload` is in `components(schemas(...))`.
 *   **Testing (TDD)**: Manual verification by running the server and checking the generated OpenAPI documentation (e.g., `/scalar`). Ensure `/indexes/{index_uid}/snapshots` (POST) appears under "Indexes" and `/snapshots/import` (POST) appears under "Snapshots" (or "FJ Snapshots"). Then, proceed to integration tests (Step 13).
+```
+cargo test -p meilisearch --test msfj_openapi_sis_tests -- --nocapture
+```
 
 ### 13. Add API Integration Tests
 
