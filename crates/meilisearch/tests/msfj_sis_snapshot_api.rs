@@ -86,73 +86,73 @@ async fn test_single_index_snapshot_creation_success() {
     assert!(snapshot_file_path.exists(), "Snapshot file not found at {:?}", snapshot_file_path);
 }
 
-// #[actix_rt::test]
-// async fn test_single_index_snapshot_import_success() {
-//     let (server, snapshot_temp_dir) = create_server_with_temp_snapshots_path().await;
-//     let source_index_uid = "test_import_source";
-//     let target_index_uid = "test_import_target";
+#[actix_rt::test]
+async fn test_single_index_snapshot_import_success() {
+    let (server, snapshot_temp_dir) = create_server_with_temp_snapshots_path().await;
+    let source_index_uid = "test_import_source";
+    let target_index_uid = "test_import_target";
 
-//     // 1. Create a source index and snapshot it
-//     // Call server.create_index with a common::Value payload
-//     let (response, code) = server.create_index(json!({"uid": source_index_uid})).await;
-//     assert_eq!(code, StatusCode::ACCEPTED);
-//     server.wait_task(response.uid()).await;
+    // 1. Create a source index and snapshot it
+    // Call server.create_index with a common::Value payload
+    let (response, code) = server.create_index(json!({"uid": source_index_uid})).await;
+    assert_eq!(code, StatusCode::ACCEPTED);
+    server.wait_task(response.uid()).await;
 
-//     let source_index = server.index(source_index_uid);
-//     // Use common::json! macro
-//     let documents = json!([ { "id": 1, "data": "content1" }, { "id": 2, "data": "content2" } ]);
-//     let (response, code) = source_index.add_documents(documents.clone(), Some("id")).await;
-//     assert_eq!(code, StatusCode::ACCEPTED);
-//     server.wait_task(response.uid()).await;
+    let source_index = server.index(source_index_uid);
+    // Use common::json! macro
+    let documents = json!([ { "id": 1, "data": "content1" }, { "id": 2, "data": "content2" } ]);
+    let (response, code) = source_index.add_documents(documents.clone(), Some("id")).await;
+    assert_eq!(code, StatusCode::ACCEPTED);
+    server.wait_task(response.uid()).await;
 
-//     // Use common::json! macro
-//     let settings_payload = json!({ "displayedAttributes": ["id", "data"], "searchableAttributes": ["data"] });
-//     let (response, code) = source_index.update_settings(settings_payload.clone()).await;
-//     assert_eq!(code, StatusCode::ACCEPTED);
-//     server.wait_task(response.uid()).await;
+    // Use common::json! macro
+    let settings_payload = json!({ "displayedAttributes": ["id", "data"], "searchableAttributes": ["data"] });
+    let (response, code) = source_index.update_settings(settings_payload.clone()).await;
+    assert_eq!(code, StatusCode::ACCEPTED);
+    server.wait_task(response.uid()).await;
 
-//     let snapshot_url = format!("/indexes/{}/snapshots", source_index_uid);
-//     // Use common::json! macro and wrap with common::Value
-//     let (response, code) = server.service.post(snapshot_url, json!({})).await;
-//     assert_eq!(code, StatusCode::ACCEPTED);
-//     let creation_task_response = server.wait_task(response.uid()).await;
-//     assert_eq!(creation_task_response["status"], "succeeded");
-//     let snapshot_uid = creation_task_response["details"]["snapshotUid"].as_str().unwrap();
-//     let snapshot_filename = format!("{}-{}.snapshot.tar.gz", source_index_uid, snapshot_uid);
-//     assert!(snapshot_temp_dir.path().join(&snapshot_filename).exists());
+    let snapshot_url = format!("/indexes/{}/snapshots", source_index_uid);
+    // Use common::json! macro and wrap with common::Value
+    let (response, code) = server.service.post(snapshot_url, json!({})).await;
+    assert_eq!(code, StatusCode::ACCEPTED);
+    let creation_task_response = server.wait_task(response.uid()).await;
+    assert_eq!(creation_task_response["status"], "succeeded");
+    let snapshot_uid = creation_task_response["details"]["snapshotUid"].as_str().unwrap();
+    let snapshot_filename = format!("{}-{}.snapshot.tar.gz", source_index_uid, snapshot_uid);
+    assert!(snapshot_temp_dir.path().join(&snapshot_filename).exists());
 
-//     // 2. Call POST /snapshots/import
-//     let import_payload = FjSingleIndexSnapshotImportPayload {
-//         source_snapshot_filename: snapshot_filename.clone(),
-//         target_index_uid: target_index_uid.to_string(),
-//     };
-//     // Wrap serde_json::Value with common::Value
-//     let (response, code) = server.service.post("/snapshots/import", common::Value(serde_json::to_value(import_payload).unwrap())).await;
+    // 2. Call POST /snapshots/import
+    let import_payload = FjSingleIndexSnapshotImportPayload {
+        source_snapshot_filename: snapshot_filename.clone(),
+        target_index_uid: target_index_uid.to_string(),
+    };
+    // Wrap serde_json::Value with common::Value
+    let (response, code) = server.service.post("/snapshots/import", common::Value(serde_json::to_value(import_payload).unwrap())).await;
 
-//     // 3. Verify 202 Accepted
-//     assert_eq!(code, StatusCode::ACCEPTED, "Import request failed: {}", response);
-//     assert!(response["type"].as_str().unwrap().contains("singleIndexSnapshotImport"));
+    // 3. Verify 202 Accepted
+    assert_eq!(code, StatusCode::ACCEPTED, "Import request failed: {}", response);
+    assert!(response["type"].as_str().unwrap().contains("singleIndexSnapshotImport"));
 
-//     // 4. Wait for task to complete
-//     let import_task_response = server.wait_task(response.uid()).await;
-//     assert_eq!(import_task_response["status"], "succeeded", "Import task did not succeed: {}", import_task_response);
+    // 4. Wait for task to complete
+    let import_task_response = server.wait_task(response.uid()).await;
+    assert_eq!(import_task_response["status"], "succeeded", "Import task did not succeed: {}", import_task_response);
 
-//     // 5. Verify new index exists with data and settings
-//     let target_index = server.index(target_index_uid);
-//     let (_target_index_info, code) = target_index.get().await; // get_index info
-//     assert_eq!(code, StatusCode::OK, "Target index not found after import");
+    // 5. Verify new index exists with data and settings
+    let target_index = server.index(target_index_uid);
+    let (_target_index_info, code) = target_index.get().await; // get_index info
+    assert_eq!(code, StatusCode::OK, "Target index not found after import");
 
-//     // Provide default options for get_all_documents
-//     let (target_docs, code) = target_index.get_all_documents(GetAllDocumentsOptions::default()).await;
-//     assert_eq!(code, StatusCode::OK);
-//     assert_eq!(target_docs["results"].as_array().unwrap().len(), 2);
+    // Provide default options for get_all_documents
+    let (target_docs, code) = target_index.get_all_documents(GetAllDocumentsOptions::default()).await;
+    assert_eq!(code, StatusCode::OK);
+    assert_eq!(target_docs["results"].as_array().unwrap().len(), 2);
 
-//     // Use target_index.settings()
-//     let (target_settings, code) = target_index.settings().await;
-//     assert_eq!(code, StatusCode::OK);
-//     assert_eq!(target_settings["displayedAttributes"], settings_payload["displayedAttributes"]);
-//     assert_eq!(target_settings["searchableAttributes"], settings_payload["searchableAttributes"]);
-// }
+    // Use target_index.settings()
+    let (target_settings, code) = target_index.settings().await;
+    assert_eq!(code, StatusCode::OK);
+    assert_eq!(target_settings["displayedAttributes"], settings_payload["displayedAttributes"]);
+    assert_eq!(target_settings["searchableAttributes"], settings_payload["searchableAttributes"]);
+}
 
 // #[actix_rt::test]
 // async fn test_single_index_snapshot_import_target_exists() {
