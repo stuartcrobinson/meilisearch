@@ -117,7 +117,8 @@ async fn test_single_index_snapshot_import_success() {
     assert_eq!(code, StatusCode::ACCEPTED);
     let creation_task_response = server.wait_task(response.uid()).await;
     assert_eq!(creation_task_response["status"], "succeeded");
-    let snapshot_uid = creation_task_response["details"]["snapshotUid"].as_str().unwrap();
+    // Corrected to use "dumpUid" as per DetailsView for SingleIndexSnapshotCreation
+    let snapshot_uid = creation_task_response["details"]["dumpUid"].as_str().unwrap();
     let snapshot_filename = format!("{}-{}.snapshot.tar.gz", source_index_uid, snapshot_uid);
     assert!(snapshot_temp_dir.path().join(&snapshot_filename).exists());
 
