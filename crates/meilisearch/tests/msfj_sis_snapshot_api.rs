@@ -23,7 +23,8 @@ use tempfile::TempDir;
 // Correctly include and use the common test utilities for an integration test file.
 mod common;
 // Unused import Value removed from this line.
-use common::{default_settings, json, Server, Owned, GetAllDocumentsOptions};
+// Removed `json` from this use statement as it's a macro available via `mod common;`
+use common::{default_settings, Server, Owned, GetAllDocumentsOptions};
 
 async fn create_server_with_temp_snapshots_path() -> (Server<Owned>, TempDir) {
     let snapshot_dir = TempDir::new().expect("Failed to create temp snapshot directory");
@@ -44,8 +45,8 @@ async fn test_single_index_snapshot_creation_success() {
     let index_uid = "test_creation_success";
 
     // 1. Create a test index
-    // Use server.create_index(uid, primary_key_option)
-    let (response, code) = server.create_index(index_uid, None).await;
+    // Call server.create_index with a common::Value payload
+    let (response, code) = server.create_index(json!({"uid": index_uid})).await;
     assert_eq!(code, StatusCode::ACCEPTED, "Failed to create index: {}", response);
     let task_id = response.uid();
     server.wait_task(task_id).await;
@@ -91,8 +92,8 @@ async fn test_single_index_snapshot_import_success() {
     let target_index_uid = "test_import_target";
 
     // 1. Create a source index and snapshot it
-    // Use server.create_index(uid, primary_key_option)
-    let (response, code) = server.create_index(source_index_uid, None).await;
+    // Call server.create_index with a common::Value payload
+    let (response, code) = server.create_index(json!({"uid": source_index_uid})).await;
     assert_eq!(code, StatusCode::ACCEPTED);
     server.wait_task(response.uid()).await;
 
@@ -159,8 +160,8 @@ async fn test_single_index_snapshot_import_target_exists() {
     let target_index_uid = "import_err_target_already_exists";
 
     // Create source index and snapshot
-    // Use server.create_index(uid, primary_key_option)
-    let (task_response, code) = server.create_index(source_index_uid, None).await;
+    // Call server.create_index with a common::Value payload
+    let (task_response, code) = server.create_index(json!({"uid": source_index_uid})).await;
     assert_eq!(code, StatusCode::ACCEPTED);
     server.wait_task(task_response.uid()).await;
     let snapshot_url = format!("/indexes/{}/snapshots", source_index_uid);
@@ -172,8 +173,8 @@ async fn test_single_index_snapshot_import_target_exists() {
     let snapshot_filename = format!("{}-{}.snapshot.tar.gz", source_index_uid, snapshot_uid);
 
     // Create target index (so it already exists)
-    // Use server.create_index(uid, primary_key_option)
-    let (task_response, code) = server.create_index(target_index_uid, None).await;
+    // Call server.create_index with a common::Value payload
+    let (task_response, code) = server.create_index(json!({"uid": target_index_uid})).await;
     assert_eq!(code, StatusCode::ACCEPTED);
     server.wait_task(task_response.uid()).await;
 
