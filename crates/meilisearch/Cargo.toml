@@ -124,6 +124,7 @@ temp-env = "0.3.6"
 urlencoding = "2.1.3"
 wiremock = "0.6.2"
 yaup = "0.3.1"
+heed = { version = "0.22.0" } # Add direct heed dev-dependency (default features include std)
 
 [build-dependencies]
 anyhow = { version = "1.0.95", optional = true }

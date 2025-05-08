@@ -63,6 +63,7 @@ mod multi_search;
 mod multi_search_analytics;
 pub mod network;
 mod open_api_utils;
+pub mod fj_snapshot; // [meilisearchfj] Add single-index snapshot routes
 mod snapshot;
 mod swap_indexes;
 pub mod tasks;
