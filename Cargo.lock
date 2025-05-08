@@ -2404,6 +2404,7 @@ dependencies = [
  "lmdb-master-sys",
  "once_cell",
  "page_size",
+ "serde",
  "synchronoise",
  "url",
 ]
@@ -3645,6 +3646,7 @@ dependencies = [
  "fst",
  "futures",
  "futures-util",
+ "heed",
  "hex",
  "index-scheduler",
  "indexmap",

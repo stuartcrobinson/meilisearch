@@ -363,6 +363,7 @@ This section outlines the steps to expose the single-index snapshot functionalit
         *   For import error tests related to invalid filenames or paths (e.g., traversal, absolute path, wrong extension, file not found, path outside snapshot dir, path is directory), these are typically caught by the handler's validation logic *before* a task is created. Assert the direct `ResponseError` (status code and error message/code) from the HTTP response.
 ```
 cargo test -p meilisearch -- --nocapture fj_snapshot::msfj_sis_api_handler_tests
+cargo test -p meilisearch --lib -- routes::fj_snapshot::msfj_sis_api_handler_tests --nocapture
 ```
 
 ### 12. Register API Routes
