@@ -403,23 +403,32 @@ cargo test -p meilisearch --test msfj_openapi_sis_tests -- --nocapture
 
 ### 13. Add API Integration Tests
 
-*   **Files**: `meilisearch/tests/snapshots/mod.rs` (Create this file and the `snapshots` directory if they don't exist) or `meilisearch/tests/fj_snapshot_api_tests.rs` (Create this file at the root of `meilisearch/tests/`).
+*   **Files**: `meilisearch/tests/msfj_sis_snapshot_api.rs`. Create this new file. This naming follows the `msfj_sis_` prefix convention for fork-specific test files and ensures Cargo automatically discovers it as an integration test without needing to modify core files like `meilisearch/tests/tests.rs`.
 *   **Action**:
     *   Write integration tests using the Meilisearch test framework (`Client`).
+    *   Ensure that the test environment configures the `snapshots_path` (via `Opt.snapshot_dir`) to a temporary directory. This guarantees test isolation and automatic cleanup of snapshot files.
     *   **Creation Test**:
         *   Create a test index.
         *   Call the `POST /indexes/{index_uid}/snapshots` endpoint.
-        *   Verify a `202 Accepted` response with valid `SummarizedTaskView`.
+        *   Verify a `202 Accepted` response with a valid `SummarizedTaskView`.
         *   Wait for the task to complete (`Succeeded`).
-        *   Verify the snapshot file exists in the expected location.
+        *   Verify the snapshot file exists in the expected temporary snapshot location.
     *   **Import Test**:
-        *   Create a snapshot using the creation endpoint or manually place one.
-        *   Call the `POST /snapshots/import` endpoint with the correct payload.
-        *   Verify a `202 Accepted` response with valid `SummarizedTaskView`.
+        *   Create a snapshot using the creation endpoint (preferred for E2E) or manually place a valid snapshot file in the test server's snapshot directory.
+        *   Call the `POST /snapshots/import` endpoint with the correct payload (referencing the snapshot filename).
+        *   Verify a `202 Accepted` response with a valid `SummarizedTaskView`.
         *   Wait for the task to complete (`Succeeded`).
-        *   Verify the new index (`target_index_uid`) exists and contains the expected data/settings.
-    *   **Error Tests**: Test invalid payloads (400), non-existent source snapshots (404), target index already existing (409), invalid snapshot paths/filenames (400), etc., verifying appropriate HTTP status codes and error messages.
+        *   Verify the new index (`target_index_uid`) exists and contains the expected data (e.g., document count, sample document) and settings (by querying the settings API for the new index).
+    *   **Error Tests**: Test various error conditions:
+        *   Invalid request payloads (expect HTTP 400).
+        *   Referring to a non-existent source snapshot filename during import (expect HTTP 404 or appropriate error if the file isn't found).
+        *   Attempting to import to a `target_index_uid` that already exists (expect HTTP 409).
+        *   Using invalid snapshot filenames or paths that might pose security risks (e.g., path traversal attempts, expect HTTP 400).
+        *   Verify appropriate HTTP status codes and Meilisearch error responses.
 *   **Step Completion Check**: Add the `cargo test` command here to run only the tests implemented for this step.
+    ```
+    cargo test -p meilisearch --test msfj_sis_snapshot_api -- --nocapture
+    ```
 
 ## E. Error Handling Guide
 
