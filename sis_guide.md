@@ -296,95 +296,107 @@ This section outlines the steps to expose the single-index snapshot functionalit
 *   **Action**:
     *   The handlers in `fj_snapshot.rs` will use helper functions `get_task_id` and `is_dry_run`. These are standard Meilisearch helper functions, confirmed to be available and public in `crates/meilisearch/src/routes/mod.rs`. They should be imported into `fj_snapshot.rs` using `use crate::routes::{get_task_id, is_dry_run};`.
     *   Handlers will take `index_scheduler: GuardedData<ActionPolicy<{ actions::SNAPSHOTS_CREATE }>, Data<IndexScheduler>>`.
-    *   **Creation Handler**:
-        *   In `fj_snapshot.rs`, the handler signature is:
+    *   **Creation Handler (`fj_create_index_snapshot`)**:
+        *   **`#[utoipa::path]` Annotation**: Add this annotation directly above the `fj_create_index_snapshot` function in `fj_snapshot.rs`.
             ```rust
-            pub async fn fj_create_index_snapshot(
-                index_scheduler: GuardedData<ActionPolicy<{ actions::SNAPSHOTS_CREATE }>, Data<IndexScheduler>>,
-                index_uid_path: web::Path<String>, // Changed from index_uid
-                req: HttpRequest,
-                opt: web::Data<Opt>,
-            ) -> Result<Json<SummarizedTaskView>, ResponseError>
+            // #[utoipa::path(
+            //     post,
+            //     path = "/indexes/{index_uid}/snapshots", // The full, final path for OpenAPI
+            //     tag = "Indexes", // To group with other index operations
+            //     params(
+            //         ("index_uid" = String, Path, description = "UID of the index for which to create a snapshot")
+            //     ),
+            //     responses(
+            //         (status = 202, description = "Task successfully enqueued for single-index snapshot creation", body = SummarizedTaskView)
+            //     ),
+            //     security(("Bearer" = ["snapshots.create", "snapshots.*", "*"])) // Match the required action
+            // )]
+            // pub async fn fj_create_index_snapshot(...) { ... }
             ```
-        *   Extract `index_uid` from `index_uid_path.into_inner()`.
-        *   Construct the task: `let task_kind = KindWithContent::SingleIndexSnapshotCreation { index_uid };`
-        *   Get `uid` and `dry_run` parameters:
+        *   Handler logic remains the same: extract `index_uid`, construct `KindWithContent::SingleIndexSnapshotCreation`, get `uid`/`dry_run`, register task, return `SummarizedTaskView`.
+    *   **Import Handler (`fj_import_index_snapshot`)**:
+        *   **`#[utoipa::path]` Annotation**: Add this annotation directly above the `fj_import_index_snapshot` function in `fj_snapshot.rs`.
             ```rust
-            let uid = get_task_id(&req, &opt)?;
-            let dry_run = is_dry_run(&req, &opt)?;
+            // #[utoipa::path(
+            //     post,
+            //     path = "/snapshots/import", // The full, final path for OpenAPI
+            //     tag = "Snapshots", // Or "FJ Snapshots" if preferred for distinction
+            //     request_body = FjSingleIndexSnapshotImportPayload,
+            //     responses(
+            //         (status = 202, description = "Task successfully enqueued for single-index snapshot import", body = SummarizedTaskView)
+            //     ),
+            //     security(("Bearer" = ["snapshots.create", "snapshots.*", "*"])) // Match the required action
+            // )]
+            // pub async fn fj_import_index_snapshot(...) { ... }
             ```
-        *   Register the task directly using the concrete `IndexScheduler`: `let task = index_scheduler.register(task_kind, uid, dry_run)?;`
-            *   (Note: `IndexScheduler::register` is synchronous and returns `Result<Task, index_scheduler::Error>`. The `?` operator will handle error conversion if needed, or it might be wrapped in `tokio::task::spawn_blocking` if it were a long-running synchronous operation, though `register` itself is typically fast).
-        *   Return `Ok(Json(task.into()))` (assuming `From<Task> for SummarizedTaskView` is implemented).
-    *   **Import Handler**:
-        *   In `fj_snapshot.rs`, the handler signature is:
-            ```rust
-            pub async fn fj_import_index_snapshot(
-                index_scheduler: GuardedData<ActionPolicy<{ actions::SNAPSHOTS_CREATE }>, Data<IndexScheduler>>,
-                payload: web::Json<FjSingleIndexSnapshotImportPayload>,
-                req: HttpRequest,
-                opt: web::Data<Opt>,
-            ) -> Result<Json<SummarizedTaskView>, ResponseError>
-            ```
-        *   Deserialize `payload.into_inner()` to get `source_snapshot_filename` and `target_index_uid`.
-        *   **Security Check for Snapshot Path**:
-            *   Validate `source_snapshot_filename`:
-                *   Ensure it's a valid filename (e.g., ends with `.snapshot.tar.gz`, contains no path traversal elements like `..`, is not an absolute path).
-                *   Use `meilisearch_types::error::Code::InvalidSnapshotPath` for errors.
-            *   Construct the full `source_snapshot_full_path` by joining `opt.snapshot_dir` (from `web::Data<Opt>`) with the validated `source_snapshot_filename`.
-            *   Canonicalize `opt.snapshot_dir` and `source_snapshot_full_path`.
-            *   Verify that the canonicalized `source_snapshot_full_path` is a child of (or within) the canonicalized `opt.snapshot_dir` and that it points to a file.
-            *   If any validation fails, return an appropriate `ResponseError`.
-        *   Construct the task:
-            ```rust
-            let task_kind = KindWithContent::SingleIndexSnapshotImport {
-                source_snapshot_path: canonical_source_path.to_string_lossy().into_owned(), // Use canonicalized path
-                target_index_uid,
-            };
-            ```
-        *   Get `uid` and `dry_run` parameters:
-            ```rust
-            let uid = get_task_id(&req, &opt)?;
-            let dry_run = is_dry_run(&req, &opt)?;
-            ```
-        *   Register the task: `let task = index_scheduler.register(task_kind, uid, dry_run)?;`
-        *   Return `Ok(Json(task.into()))`.
-*   **Testing (TDD)**: Write unit tests for the handlers in a module named `msfj_sis_api_handler_tests` within `fj_snapshot.rs`.
-    *   These tests should now use a real `IndexScheduler` instance, configured for a test environment (e.g., using a helper function like `test_index_scheduler` that sets up a temporary task store).
-    *   The Actix `App` should be initialized with `web::Data::new(real_scheduler_instance.clone())`.
-    *   Assertions will involve:
-        *   Checking the HTTP response status and `SummarizedTaskView` body.
-        *   Fetching the created task from the `real_scheduler_instance` using `get_task(response_task_view.task_uid)`.
-        *   Verifying the properties of the fetched `Task` struct (e.g., `kind`, `original_query.uid`, `original_query.dry_run`).
-    *   Test payload validation and path security checks thoroughly (these should result in direct HTTP errors, not tasks).
-    *   **Note for updating other tests**: The commented-out tests (e.g., `test_fj_create_index_snapshot_dry_run`, `test_fj_import_index_snapshot_success`, error cases for import) should be updated following this pattern.
-        *   For `dry_run` tests, assert `registered_task.original_query.as_ref().unwrap().dry_run == true`.
-        *   For import success tests, verify `registered_task.kind` matches `KindWithContent::SingleIndexSnapshotImport` and check its `source_snapshot_path` and `target_index_uid`. Also verify `registered_task.original_query` for `uid` and `dry_run`.
-        *   For import error tests related to invalid filenames or paths (e.g., traversal, absolute path, wrong extension, file not found, path outside snapshot dir, path is directory), these are typically caught by the handler's validation logic *before* a task is created. Assert the direct `ResponseError` (status code and error message/code) from the HTTP response.
+        *   Handler logic remains the same: deserialize payload, perform security checks on `source_snapshot_filename`, construct `KindWithContent::SingleIndexSnapshotImport`, get `uid`/`dry_run`, register task, return `SummarizedTaskView`.
+*   **Testing (TDD)**: (Test logic remains the same as previously described, focusing on real `IndexScheduler` and verifying task properties).
 ```
 cargo test -p meilisearch -- --nocapture fj_snapshot::msfj_sis_api_handler_tests
 cargo test -p meilisearch --lib -- routes::fj_snapshot::msfj_sis_api_handler_tests --nocapture
 ```
 
-### 12. Register API Routes
+### 12. Register API Routes and OpenAPI Documentation
 
-*   **File**: `crates/meilisearch/src/routes/mod.rs`, `crates/meilisearch/src/routes/snapshot.rs` (or `fj_snapshot.rs`), `crates/meilisearch/src/routes/indexes/mod.rs`.
+*   **Files**: `crates/meilisearch/src/routes/mod.rs`, `crates/meilisearch/src/routes/fj_snapshot.rs`, `crates/meilisearch/src/routes/indexes/mod.rs`.
 *   **Action**:
-    *   If a new `fj_snapshot.rs` file is created for the handlers:
-        *   Define a `configure` function within it (e.g., `pub fn configure_fj_snapshot_routes(cfg: &mut web::ServiceConfig)`).
-        *   Register `fj_import_index_snapshot` under `/import` within this `configure` function.
-        *   Add `fj_create_index_snapshot` and `fj_import_index_snapshot` to an `utoipa::OpenApi` derive on a new struct (e.g., `FjSnapshotApi`) within `fj_snapshot.rs`.
-    *   If modifying existing `routes/snapshot.rs`:
-        *   Add `fj_import_index_snapshot` to its `configure` function under `/import`.
-        *   Add `fj_create_index_snapshot` and `fj_import_index_snapshot` to the existing `SnapshotApi`'s `utoipa::OpenApi` derive.
-    *   In `routes/indexes/mod.rs`:
-        *   Import `fj_create_index_snapshot` (from `crate::routes::snapshot` or `crate::routes::fj_snapshot`).
-        *   In the `configure` function (likely within `web::scope("/{index_uid}")`), add a route for `fj_create_index_snapshot` under `/snapshots` (e.g., `index_scope.service(web::resource("/snapshots").route(web::post().to(SeqHandler(fj_create_index_snapshot))))`).
-    *   In `routes/mod.rs`:
-        *   If a new `fj_snapshot.rs` with its own `configure_fj_snapshot_routes` and `FjSnapshotApi` was created:
-            *   Call `cfg.service(web::scope("/snapshots").configure(crate::routes::fj_snapshot::configure_fj_snapshot_routes))` to mount the new routes.
-            *   Add `FjSnapshotApi` to the `MeilisearchApi`'s `nest` macro.
-*   **Testing (TDD)**: Manual verification by running the server and checking OpenAPI docs, or proceed to integration tests (Step 13).
+    *   **In `crates/meilisearch/src/routes/fj_snapshot.rs`**:
+        *   Ensure handler functions `fj_create_index_snapshot` and `fj_import_index_snapshot` are annotated with `#[utoipa::path(...)]` as detailed in Step 11.
+        *   Define the `configure` function to register `fj_import_index_snapshot` under `/import` (relative to the `/snapshots` scope it will be mounted under).
+            ```rust
+            // Example within fj_snapshot.rs
+            // pub fn configure(cfg: &mut web::ServiceConfig) {
+            //     cfg.service(
+            //         web::resource("/import") // Will become /snapshots/import
+            //             .route(web::post().to(fj_import_index_snapshot)),
+            //     );
+            // }
+            ```
+        *   Define the `FjSnapshotApi` struct for OpenAPI. It should list `fj_import_index_snapshot` in its `paths`. The `fj_create_index_snapshot` path will be picked up by `IndexesApi`.
+            ```rust
+            // Example within fj_snapshot.rs
+            // #[derive(OpenApi)]
+            // #[openapi(
+            //     paths(fj_import_index_snapshot), // Only paths directly configured by this module's `configure`
+            //     components(schemas(FjSingleIndexSnapshotImportPayload, SummarizedTaskView, ResponseError)),
+            //     tags((name = "Snapshots", description = "Manage single-index snapshots.")) // Or "FJ Snapshots"
+            // )]
+            // pub struct FjSnapshotApi;
+            ```
+    *   **In `crates/meilisearch/src/routes/indexes/mod.rs`**:
+        *   Ensure `fj_create_index_snapshot` (in `fj_snapshot.rs`) is annotated with `#[utoipa::path(...)]` as detailed in Step 11, with its full path like `path = "/indexes/{index_uid}/snapshots"`.
+        *   **Re-export `fj_create_index_snapshot`**: Add `pub use crate::routes::fj_snapshot::fj_create_index_snapshot;` at the top of `routes/indexes/mod.rs`.
+        *   In the `configure` function, the route for `fj_create_index_snapshot` remains:
+            ```rust
+            // Example within routes/indexes/mod.rs configure function
+            // cfg.service(
+            //     web::scope("/{index_uid}")
+            //         // ...
+            //         .service(web::resource("/snapshots") // Will become /indexes/{index_uid}/snapshots
+            //             .route(web::post().to(fj_create_index_snapshot))) // Use re-exported name
+            // );
+            ```
+        *   In the `IndexesApi` struct's `#[openapi(paths(...))]` attribute, list the re-exported `fj_create_index_snapshot` (simple name).
+            ```rust
+            // Example for IndexesApi in routes/indexes/mod.rs
+            // #[openapi(
+            //     // ... other paths
+            //     paths(..., crate::routes::fj_snapshot::fj_create_index_snapshot), // Use fully qualified path
+            //     // ...
+            // )]
+            // pub struct IndexesApi;
+            ```
+    *   **In `crates/meilisearch/src/routes/mod.rs`**:
+        *   Module declaration: `pub mod fj_snapshot;`.
+        *   Mount `fj_snapshot::configure` under `/snapshots`:
+            ```rust
+            // Example within routes/mod.rs configure function
+            // cfg.service(web::scope("/snapshots").configure(fj_snapshot::configure));
+            ```
+        *   In `MeilisearchApi`'s `#[openapi(...)]` derive:
+            *   Nest `FjSnapshotApi`: `(path = "/snapshots", api = crate::routes::fj_snapshot::FjSnapshotApi)`.
+            *   Ensure `FjSingleIndexSnapshotImportPayload` is in `components(schemas(...))`.
+*   **Testing (TDD)**: Manual verification by running the server and checking the generated OpenAPI documentation (e.g., `/scalar`). Ensure `/indexes/{index_uid}/snapshots` (POST) appears under "Indexes" and `/snapshots/import` (POST) appears under "Snapshots" (or "FJ Snapshots"). Then, proceed to integration tests (Step 13).
 
 ### 13. Add API Integration Tests
 

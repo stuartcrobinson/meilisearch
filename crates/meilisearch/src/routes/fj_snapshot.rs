@@ -13,7 +13,21 @@ use crate::extractors::authentication::{policies::ActionPolicy, GuardedData};
 // or exposed as extension traits on HttpRequest.
 use crate::routes::{get_task_id, is_dry_run, SummarizedTaskView};
 use crate::Opt;
+// [meilisearchfj] Removed unused import: use utoipa::ToSchema;
 
+// [meilisearchfj] Added utoipa::path for OpenAPI documentation
+#[utoipa::path(
+    post,
+    path = "/{indexUid}/snapshots", // Path relative to the "/indexes" scope, use camelCase param
+    tag = "Indexes", // Align with IndexesApi tag
+    params(
+        ("indexUid" = String, Path, description = "UID of the index for which to create a snapshot")
+    ),
+    responses(
+        (status = 202, description = "Task successfully enqueued for single-index snapshot creation", body = SummarizedTaskView)
+    ),
+    security(("Bearer" = ["snapshots.create", "snapshots.*", "*"]))
+)]
 pub async fn fj_create_index_snapshot(
     index_scheduler: GuardedData<ActionPolicy<{ actions::SNAPSHOTS_CREATE }>, Data<IndexScheduler>>,
     index_uid_path: web::Path<String>,
@@ -28,9 +42,112 @@ pub async fn fj_create_index_snapshot(
     let dry_run = is_dry_run(&req, &opt)?;
     
     let task = index_scheduler.register(task_kind, uid, dry_run)?;
-    println!("[HANDLER_CREATE_SNAPSHOT] Registered task UID: {:?}, Dry Run: {}, Status: {:?}", task.uid, dry_run, task.status);
+    // [meilisearchfj] Removed println! statement
     
     // Use SummarizedTaskView::from(task) or task.into() if From<Task> for SummarizedTaskView is implemented
+    Ok(HttpResponse::Accepted().json(SummarizedTaskView::from(task)))
+}
+
+// [meilisearchfj] Added utoipa::path for OpenAPI documentation
+#[utoipa::path(
+    post,
+    path = "/import", // Path relative to the "/snapshots" scope where FjSnapshotApi is nested
+    tag = "Snapshots", // Consistent with FjSnapshotApi tag
+    request_body = FjSingleIndexSnapshotImportPayload,
+    responses(
+        (status = 202, description = "Task successfully enqueued for single-index snapshot import", body = SummarizedTaskView)
+    ),
+    security(("Bearer" = ["snapshots.create", "snapshots.*", "*"]))
+)]
+pub async fn fj_import_index_snapshot(
+    index_scheduler: GuardedData<ActionPolicy<{ actions::SNAPSHOTS_CREATE }>, Data<IndexScheduler>>,
+    payload: web::Json<FjSingleIndexSnapshotImportPayload>,
+    req: HttpRequest,
+    opt: web::Data<Opt>,
+) -> Result<HttpResponse, ResponseError> {
+    let FjSingleIndexSnapshotImportPayload { source_snapshot_filename, target_index_uid } =
+        payload.into_inner();
+    
+    // [meilisearchfj] Removed println! statement
+    // Security Check for Snapshot Path
+    if source_snapshot_filename.contains("..")
+        || source_snapshot_filename.starts_with('/')
+        || source_snapshot_filename.starts_with('\\')
+    {
+        // [meilisearchfj] Removed println! statement
+        return Err(ResponseError::from_msg(
+            format!(
+                "Invalid snapshot filename provided: '{}'. Filename cannot contain '..' or be an absolute path.",
+                source_snapshot_filename
+            ),
+            Code::InvalidSnapshotPath,
+        ));
+    }
+    // [meilisearchfj] Removed println! statement
+
+    if !source_snapshot_filename.ends_with(".snapshot.tar.gz") {
+        // Or any other configured/expected extension
+        return Err(ResponseError::from_msg(
+            format!(
+                "Invalid snapshot filename provided: '{}'. Filename must end with '.snapshot.tar.gz'.",
+                source_snapshot_filename
+            ),
+            Code::InvalidSnapshotPath,
+        ));
+    }
+
+    let snapshot_dir_path = &opt.snapshot_dir;
+    let source_snapshot_full_path = snapshot_dir_path.join(&source_snapshot_filename);
+
+    let canonical_snapshot_dir = match std::fs::canonicalize(snapshot_dir_path) {
+        Ok(path) => path,
+        Err(e) => {
+            return Err(ResponseError::from_msg(
+                format!("Failed to access snapshot directory: {}. Error: {}", snapshot_dir_path.display(), e),
+                Code::Internal, // Or a more specific error if available
+            ));
+        }
+    };
+
+    let canonical_source_path = match std::fs::canonicalize(&source_snapshot_full_path) {
+        Ok(path) => path,
+        Err(_) => {
+            return Err(ResponseError::from_msg(
+                format!("Snapshot file '{}' not found or not accessible.", source_snapshot_filename),
+                Code::InvalidSnapshotPath, // Or NotFound if more appropriate and available
+            ));
+        }
+    };
+
+    if !canonical_source_path.starts_with(&canonical_snapshot_dir)
+        || canonical_source_path == canonical_snapshot_dir
+    {
+        return Err(ResponseError::from_msg(
+            format!(
+                "Invalid snapshot file path provided: '{}'. Path is outside the configured snapshots directory.",
+                source_snapshot_filename
+            ),
+            Code::InvalidSnapshotPath,
+        ));
+    }
+
+    if !canonical_source_path.is_file() {
+        return Err(ResponseError::from_msg(
+            format!("Snapshot path '{}' does not point to a file.", source_snapshot_filename),
+            Code::InvalidSnapshotPath,
+        ));
+    }
+
+    let task_kind = KindWithContent::SingleIndexSnapshotImport {
+        source_snapshot_path: canonical_source_path.to_string_lossy().into_owned(),
+        target_index_uid,
+    };
+
+    let uid: Option<TaskId> = get_task_id(&req, &opt)?;
+    let dry_run = is_dry_run(&req, &opt)?;
+
+    let task = index_scheduler.register(task_kind, uid, dry_run)?;
+
     Ok(HttpResponse::Accepted().json(SummarizedTaskView::from(task)))
 }
 
@@ -715,95 +832,20 @@ mod msfj_sis_api_handler_tests {
     }
 }
 
-pub async fn fj_import_index_snapshot(
-    index_scheduler: GuardedData<ActionPolicy<{ actions::SNAPSHOTS_CREATE }>, Data<IndexScheduler>>,
-    payload: web::Json<FjSingleIndexSnapshotImportPayload>,
-    req: HttpRequest,
-    opt: web::Data<Opt>,
-) -> Result<HttpResponse, ResponseError> {
-    let FjSingleIndexSnapshotImportPayload { source_snapshot_filename, target_index_uid } =
-        payload.into_inner();
-    
-    println!("[HANDLER_IMPORT_SNAPSHOT] Received source_snapshot_filename: '{}'", source_snapshot_filename);
-    // Security Check for Snapshot Path
-    if source_snapshot_filename.contains("..")
-        || source_snapshot_filename.starts_with('/')
-        || source_snapshot_filename.starts_with('\\')
-    {
-        println!("[HANDLER_IMPORT_SNAPSHOT] Detected absolute path or traversal for: '{}'", source_snapshot_filename);
-        return Err(ResponseError::from_msg(
-            format!(
-                "Invalid snapshot filename provided: '{}'. Filename cannot contain '..' or be an absolute path.",
-                source_snapshot_filename
-            ),
-            Code::InvalidSnapshotPath,
-        ));
-    }
-    println!("[HANDLER_IMPORT_SNAPSHOT] Passed absolute path/traversal check for: '{}'", source_snapshot_filename);
+// [meilisearchfj] Added configure function and FjSnapshotApi for OpenAPI
+use utoipa::OpenApi;
 
-    if !source_snapshot_filename.ends_with(".snapshot.tar.gz") {
-        // Or any other configured/expected extension
-        return Err(ResponseError::from_msg(
-            format!(
-                "Invalid snapshot filename provided: '{}'. Filename must end with '.snapshot.tar.gz'.",
-                source_snapshot_filename
-            ),
-            Code::InvalidSnapshotPath,
-        ));
-    }
+#[derive(OpenApi)]
+#[openapi(
+    paths(fj_import_index_snapshot),
+    components(schemas(FjSingleIndexSnapshotImportPayload, SummarizedTaskView, ResponseError)),
+    tags((name = "Snapshots", description = "Manage single-index snapshots. For full instance snapshots, see the main /snapshots endpoint."))
+)]
+pub struct FjSnapshotApi;
 
-    let snapshot_dir_path = &opt.snapshot_dir;
-    let source_snapshot_full_path = snapshot_dir_path.join(&source_snapshot_filename);
-
-    let canonical_snapshot_dir = match std::fs::canonicalize(snapshot_dir_path) {
-        Ok(path) => path,
-        Err(e) => {
-            return Err(ResponseError::from_msg(
-                format!("Failed to access snapshot directory: {}. Error: {}", snapshot_dir_path.display(), e),
-                Code::Internal, // Or a more specific error if available
-            ));
-        }
-    };
-
-    let canonical_source_path = match std::fs::canonicalize(&source_snapshot_full_path) {
-        Ok(path) => path,
-        Err(_) => {
-            return Err(ResponseError::from_msg(
-                format!("Snapshot file '{}' not found or not accessible.", source_snapshot_filename),
-                Code::InvalidSnapshotPath, // Or NotFound if more appropriate and available
-            ));
-        }
-    };
-
-    if !canonical_source_path.starts_with(&canonical_snapshot_dir)
-        || canonical_source_path == canonical_snapshot_dir
-    {
-        return Err(ResponseError::from_msg(
-            format!(
-                "Invalid snapshot file path provided: '{}'. Path is outside the configured snapshots directory.",
-                source_snapshot_filename
-            ),
-            Code::InvalidSnapshotPath,
-        ));
-    }
-
-    if !canonical_source_path.is_file() {
-        return Err(ResponseError::from_msg(
-            format!("Snapshot path '{}' does not point to a file.", source_snapshot_filename),
-            Code::InvalidSnapshotPath,
-        ));
-    }
-
-    let task_kind = KindWithContent::SingleIndexSnapshotImport {
-        source_snapshot_path: canonical_source_path.to_string_lossy().into_owned(),
-        target_index_uid,
-    };
-
-    let uid: Option<TaskId> = get_task_id(&req, &opt)?;
-    let dry_run = is_dry_run(&req, &opt)?;
-
-    let task = index_scheduler.register(task_kind, uid, dry_run)?;
-
-    Ok(HttpResponse::Accepted().json(SummarizedTaskView::from(task)))
+pub fn configure(cfg: &mut web::ServiceConfig) {
+    cfg.service(
+        web::resource("/import")
+            .route(web::post().to(fj_import_index_snapshot)),
+    );
 }
-// Removed duplicated function definition that was here

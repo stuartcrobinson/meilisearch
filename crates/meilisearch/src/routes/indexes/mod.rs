@@ -27,6 +27,8 @@ use crate::extractors::authentication::{AuthenticationError, GuardedData};
 use crate::extractors::sequential_extractor::SeqHandler;
 use crate::routes::is_dry_run;
 use crate::Opt;
+// [meilisearchfj] Re-export fj_create_index_snapshot for utoipa
+pub use crate::routes::fj_snapshot::fj_create_index_snapshot;
 
 pub mod documents;
 pub mod facet_search;
@@ -47,7 +49,7 @@ mod similar_analytics;
         (path = "/", api = similar::SimilarApi),
         (path = "/", api = settings::SettingsApi),
     ),
-    paths(list_indexes, create_index, get_index, update_index, delete_index, get_index_stats),
+    paths(list_indexes, create_index, get_index, update_index, delete_index, get_index_stats, crate::routes::fj_snapshot::fj_create_index_snapshot), // [meilisearchfj] Use fully qualified path
     tags(
         (
             name = "Indexes",
@@ -77,7 +79,9 @@ pub fn configure(cfg: &mut web::ServiceConfig) {
             .service(web::scope("/search").configure(search::configure))
             .service(web::scope("/facet-search").configure(facet_search::configure))
             .service(web::scope("/similar").configure(similar::configure))
-            .service(web::scope("/settings").configure(settings::configure)),
+            .service(web::scope("/settings").configure(settings::configure))
+            // [meilisearchfj] Add route for creating a single-index snapshot
+            .service(web::resource("/snapshots").route(web::post().to(SeqHandler(crate::routes::fj_snapshot::fj_create_index_snapshot)))),
     );
 }
 

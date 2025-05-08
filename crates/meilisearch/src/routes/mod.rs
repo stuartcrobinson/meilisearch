@@ -64,6 +64,7 @@ mod multi_search_analytics;
 pub mod network;
 mod open_api_utils;
 pub mod fj_snapshot; // [meilisearchfj] Add single-index snapshot routes
+// [meilisearchfj] Ensure fj_snapshot module is public if not already. It is.
 mod snapshot;
 mod swap_indexes;
 pub mod tasks;
@@ -78,7 +79,9 @@ mod tasks_test;
         (path = "/indexes", api = indexes::IndexesApi),
         // We must stop the search path here because the rest must be configured by each route individually
         (path = "/indexes", api = indexes::search::SearchApi),
+        // [meilisearchfj] Nest FjSnapshotApi, keep existing SnapshotApi for full snapshots
         (path = "/snapshots", api = snapshot::SnapshotApi),
+        (path = "/snapshots", api = crate::routes::fj_snapshot::FjSnapshotApi),
         (path = "/dumps", api = dump::DumpApi),
         (path = "/keys", api = api_key::ApiKeyApi),
         (path = "/metrics", api = metrics::MetricApi),
@@ -97,7 +100,7 @@ mod tasks_test;
         url = "/",
         description = "Local server",
     )),
-    components(schemas(PaginationView<KeyView>, PaginationView<IndexView>, IndexView, DocumentDeletionByFilter, AllBatches, BatchStats, ProgressStepView, ProgressView, BatchView, RuntimeTogglableFeatures, SwapIndexesPayload, DocumentEditionByFunction, MergeFacets, FederationOptions, SearchQueryWithIndex, Federation, FederatedSearch, FederatedSearchResult, SearchResults, SearchResultWithIndex, SimilarQuery, SimilarResult, PaginationView<serde_json::Value>, BrowseQuery, UpdateIndexRequest, IndexUid, IndexCreateRequest, KeyView, Action, CreateApiKey, UpdateStderrLogs, LogMode, GetLogs, IndexStats, Stats, HealthStatus, HealthResponse, VersionResponse, Code, ErrorType, AllTasks, TaskView, Status, DetailsView, ResponseError, Settings<Unchecked>, Settings<Checked>, TypoSettings, MinWordSizeTyposSetting, FacetingSettings, PaginationSettings, SummarizedTaskView, Kind, Network, Remote, FilterableAttributesRule, FilterableAttributesPatterns, AttributePatterns, FilterableAttributesFeatures, FilterFeatures, FjSingleIndexSnapshotImportPayload)) // [meilisearchfj] Added FjSingleIndexSnapshotImportPayload
+    components(schemas(PaginationView<KeyView>, PaginationView<IndexView>, IndexView, DocumentDeletionByFilter, AllBatches, BatchStats, ProgressStepView, ProgressView, BatchView, RuntimeTogglableFeatures, SwapIndexesPayload, DocumentEditionByFunction, MergeFacets, FederationOptions, SearchQueryWithIndex, Federation, FederatedSearch, FederatedSearchResult, SearchResults, SearchResultWithIndex, SimilarQuery, SimilarResult, PaginationView<serde_json::Value>, BrowseQuery, UpdateIndexRequest, IndexUid, IndexCreateRequest, KeyView, Action, CreateApiKey, UpdateStderrLogs, LogMode, GetLogs, IndexStats, Stats, HealthStatus, HealthResponse, VersionResponse, Code, ErrorType, AllTasks, TaskView, Status, DetailsView, ResponseError, Settings<Unchecked>, Settings<Checked>, TypoSettings, MinWordSizeTyposSetting, FacetingSettings, PaginationSettings, SummarizedTaskView, Kind, Network, Remote, FilterableAttributesRule, FilterableAttributesPatterns, AttributePatterns, FilterableAttributesFeatures, FilterFeatures, FjSingleIndexSnapshotImportPayload)) // [meilisearchfj] Added FjSingleIndexSnapshotImportPayload. Ensure it's listed.
 )]
 pub struct MeilisearchApi;
 
@@ -108,7 +111,8 @@ pub fn configure(cfg: &mut web::ServiceConfig) {
         .service(web::scope("/logs").configure(logs::configure))
         .service(web::scope("/keys").configure(api_key::configure))
         .service(web::scope("/dumps").configure(dump::configure))
-        .service(web::scope("/snapshots").configure(snapshot::configure))
+        // [meilisearchfj] Mount fj_snapshot routes under /snapshots, alongside existing snapshot routes
+        .service(web::scope("/snapshots").configure(snapshot::configure).configure(fj_snapshot::configure))
         .service(web::resource("/stats").route(web::get().to(get_stats)))
         .service(web::resource("/version").route(web::get().to(get_version)))
         .service(web::scope("/indexes").configure(indexes::configure))
