@@ -403,7 +403,7 @@ cargo test -p meilisearch --test msfj_openapi_sis_tests -- --nocapture
 
 ### 13. Add API Integration Tests
 
-*   **Files**: `meilisearch/tests/msfj_sis_snapshot_api.rs`. Create this new file. This naming follows the `msfj_sis_` prefix convention for fork-specific test files and ensures Cargo automatically discovers it as an integration test without needing to modify core files like `meilisearch/tests/tests.rs`.
+*   **Files**: `crates/meilisearch/tests/msfj_sis_snapshot_api.rs`. Create this new file. This naming follows the `msfj_sis_` prefix convention for fork-specific test files and ensures Cargo automatically discovers it as an integration test without needing to modify core files like `meilisearch/tests/tests.rs`.
 *   **Action**:
     *   Write integration tests using the Meilisearch test framework (`Client`).
     *   Ensure that the test environment configures the `snapshots_path` (via `Opt.snapshot_dir`) to a temporary directory. This guarantees test isolation and automatic cleanup of snapshot files.
