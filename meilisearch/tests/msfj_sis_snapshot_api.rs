@@ -22,9 +22,9 @@ use tempfile::TempDir;
 
 // Correctly include and use the common test utilities for an integration test file.
 mod common;
-use common::{default_settings_for_test, Server, Value};
+use common::{default_settings_for_test, Server, Value, Owned};
 
-async fn create_server_with_temp_snapshots_path() -> (Server<TempDir>, TempDir) {
+async fn create_server_with_temp_snapshots_path() -> (Server<Owned>, TempDir) {
     let snapshot_dir = TempDir::new().expect("Failed to create temp snapshot directory");
     let mut opt = default_settings_for_test();
     opt.snapshot_dir = snapshot_dir.path().to_path_buf();
