@@ -76,8 +76,9 @@ async fn test_single_index_snapshot_creation_success() {
     let task_response = server.wait_task(task_id).await;
     assert_eq!(task_response["status"], "succeeded", "Snapshot task did not succeed: {}", task_response);
     let details = task_response.get("details").expect("Task details missing");
-    let snapshot_uid = details.get("snapshotUid").expect("snapshotUid missing in details").as_str().expect("snapshotUid not a string");
-    assert!(!snapshot_uid.is_empty(), "snapshotUid is empty");
+    // Expect "dumpUid" as per current DetailsView conversion for SingleIndexSnapshotCreation
+    let snapshot_uid = details.get("dumpUid").expect("dumpUid missing in details").as_str().expect("dumpUid not a string");
+    assert!(!snapshot_uid.is_empty(), "dumpUid is empty");
 
     // 5. Verify the snapshot file exists
     let snapshot_filename = format!("{}-{}.snapshot.tar.gz", index_uid, snapshot_uid);
