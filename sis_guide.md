@@ -267,7 +267,7 @@ This section outlines the steps to expose the single-index snapshot functionalit
 *   **Action**:
     *   **Payload Struct**: Define `SingleIndexSnapshotImportPayload` in `meilisearch-types/src/snapshot.rs`.
         *   Fields: `source_snapshot_filename: String`, `target_index_uid: String`.
-        *   Add necessary `serde` derives (`Deserialize`).
+        *   Add necessary `serde` derives (`Deserialize`, `Serialize`).
     *   **Creation Route**: Define a `POST` route, e.g., `/indexes/{index_uid}/snapshots`.
         *   No request body needed.
         *   Response body: Standard `SummarizedTaskView`.
@@ -397,26 +397,38 @@ cargo test -p meilisearch --lib -- routes::fj_snapshot::msfj_sis_api_handler_tes
             *   Nest `FjSnapshotApi`: `(path = "/snapshots", api = crate::routes::fj_snapshot::FjSnapshotApi)`.
             *   Ensure `FjSingleIndexSnapshotImportPayload` is in `components(schemas(...))`.
 *   **Testing (TDD)**: Manual verification by running the server and checking the generated OpenAPI documentation (e.g., `/scalar`). Ensure `/indexes/{index_uid}/snapshots` (POST) appears under "Indexes" and `/snapshots/import` (POST) appears under "Snapshots" (or "FJ Snapshots"). Then, proceed to integration tests (Step 13).
+```
+cargo test -p meilisearch --test msfj_openapi_sis_tests -- --nocapture
+```
 
 ### 13. Add API Integration Tests
 
-*   **Files**: `meilisearch/tests/snapshots/mod.rs` (Create this file and the `snapshots` directory if they don't exist) or `meilisearch/tests/fj_snapshot_api_tests.rs` (Create this file at the root of `meilisearch/tests/`).
+*   **Files**: `crates/meilisearch/tests/msfj_sis_snapshot_api.rs`. Create this new file. This naming follows the `msfj_sis_` prefix convention for fork-specific test files and ensures Cargo automatically discovers it as an integration test without needing to modify core files like `meilisearch/tests/tests.rs`.
 *   **Action**:
     *   Write integration tests using the Meilisearch test framework (`Client`).
+    *   Ensure that the test environment configures the `snapshots_path` (via `Opt.snapshot_dir`) to a temporary directory. This guarantees test isolation and automatic cleanup of snapshot files.
     *   **Creation Test**:
         *   Create a test index.
         *   Call the `POST /indexes/{index_uid}/snapshots` endpoint.
-        *   Verify a `202 Accepted` response with valid `SummarizedTaskView`.
+        *   Verify a `202 Accepted` response with a valid `SummarizedTaskView`.
         *   Wait for the task to complete (`Succeeded`).
-        *   Verify the snapshot file exists in the expected location.
+        *   Verify the snapshot file exists in the expected temporary snapshot location.
     *   **Import Test**:
-        *   Create a snapshot using the creation endpoint or manually place one.
-        *   Call the `POST /snapshots/import` endpoint with the correct payload.
-        *   Verify a `202 Accepted` response with valid `SummarizedTaskView`.
+        *   Create a snapshot using the creation endpoint (preferred for E2E) or manually place a valid snapshot file in the test server's snapshot directory.
+        *   Call the `POST /snapshots/import` endpoint with the correct payload (referencing the snapshot filename).
+        *   Verify a `202 Accepted` response with a valid `SummarizedTaskView`.
         *   Wait for the task to complete (`Succeeded`).
-        *   Verify the new index (`target_index_uid`) exists and contains the expected data/settings.
-    *   **Error Tests**: Test invalid payloads (400), non-existent source snapshots (404), target index already existing (409), invalid snapshot paths/filenames (400), etc., verifying appropriate HTTP status codes and error messages.
+        *   Verify the new index (`target_index_uid`) exists and contains the expected data (e.g., document count, sample document) and settings (by querying the settings API for the new index).
+    *   **Error Tests**: Test various error conditions:
+        *   Invalid request payloads (expect HTTP 400).
+        *   Referring to a non-existent source snapshot filename during import (expect HTTP 404 or appropriate error if the file isn't found).
+        *   Attempting to import to a `target_index_uid` that already exists (expect HTTP 409).
+        *   Using invalid snapshot filenames or paths that might pose security risks (e.g., path traversal attempts, expect HTTP 400).
+        *   Verify appropriate HTTP status codes and Meilisearch error responses.
 *   **Step Completion Check**: Add the `cargo test` command here to run only the tests implemented for this step.
+    ```
+    cargo test -p meilisearch --test msfj_sis_snapshot_api -- --nocapture
+    ```
 
 ## E. Error Handling Guide
 
@@ -473,41 +485,5 @@ The key is to reduce assumptions and verify types and paths by looking directly 
 errors become stubborn.
 
 NOTE:  when the AI agent interacts with the human, it should avoid pleasantries whenever possible.  no need for thank you. we want the conversation to be efficient and concise.
-
-
-## E. Development Workflow Notes
-
-### Code Changes:
-
-Do not generate any SEARCH/REPLACE blocks or suggest code modifications for any step until explicitly asked by the user to do so for that specific step.
-
-
-### Troubleshooting:
-
-When encountering persistent compiler errors (like type mismatches, unresolved paths, or missing methods), avoid excessive trial-and-error. Instead, **prioritize understanding the involved types and interfaces.** Ask the AI assistant to show the definitions of relevant structs, enums, traits, and functions. Examine their fields (public vs. private), methods, and implemented traits. Additionally, request examples of similar code usage elsewhere in the Meilisearch codebase. This direct inspection often reveals the root cause (e.g., incorrect type usage, privacy issues, missing trait implementations, or incorrect method calls) much faster than repeated code change attempts.
-
-When the AI LLM coder (like aider) is trying to debug and fix errors, it should feel encouraged to ask to look at any other files that might be helpful.
-
-Debugging:
-
- 1 Look at Definitions Sooner: When facing persistent type errors (E0223, E0308, E0433, E0599) or ambiguity, don't spend too long trying path        
-   variations. Ask to see the definition of the relevant struct/enum/trait and the function/method being called much earlier. This would have quickly
-   revealed that EmbeddingSettings was a struct and that milli::OrderBy was the wrong enum.                                                          
- 2 Verify Re-exports: When using paths like crate::some_module::Type, be mindful that some_module might be a re-export. If errors persist, ask to see
-   the lib.rs or mod.rs file where the re-export occurs (pub use ...) and potentially the lib.rs of the original crate to confirm exactly which type 
-   is being re-exported, especially if names might collide (like OrderBy).                                                                           
- 3 Trust Specific Error Codes (Sometimes): While E0599 was misleading due to the underlying E0223, the E0308 (mismatched types) and E0433 (failed to 
-   resolve path) errors were quite accurate once the major ambiguity was gone. Pay close attention to the expected vs. found types in E0308.         
- 4 Look for Examples: Yes, being more aggressive about asking for examples of similar code elsewhere in the Meilisearch codebase would likely have   
-   shown the correct way to construct EmbeddingSettings or set the sort_facet_values_by option much faster. Existing tests or core logic often       
-   provide the best patterns.                                                                                                                        
- 5 Clean Builds: While it didn't solve the core issue here, running cargo clean periodically during complex debugging can rule out stale build       
-   artifacts causing strange behavior.                                                                                                               
-
-When debugging persistent test failures, avoid sequential trial-and-error fixes. Instead, adopt a broader diagnostic approach. Formulate multiple hypotheses for the root cause (e.g., path issues, permissions, resource lifecycles, library interactions). Instrument the code around the failure point with detailed logging, assertions, and contextual error messages (`map_err`) to pinpoint the exact failure location and state. Verify assumptions, like directory existence or file accessibility, just before the failing operation. This systematic approach helps identify the true cause, such as premature temporary file cleanup or incorrect path handling, more efficiently than isolated fixes.
-
-The key is to reduce assumptions and verify types and paths by looking directly at the relevant source code definitions and re-exports when compiler 
-errors become stubborn.                                                                                                                              
-
 
 TODO:  add a requirement that for each implementation step, we take a few steps to review everything newly written for for accuracy and reasonablenes and good software practices, and that it follows the rest of this sis_guide.md . and then double check that any before writing the tests and moving on

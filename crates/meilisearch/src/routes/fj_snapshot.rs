@@ -67,6 +67,21 @@ pub async fn fj_import_index_snapshot(
 ) -> Result<HttpResponse, ResponseError> {
     let FjSingleIndexSnapshotImportPayload { source_snapshot_filename, target_index_uid } =
         payload.into_inner();
+
+    // Validate target_index_uid format
+    if target_index_uid.is_empty()
+        || !target_index_uid
+            .chars()
+            .all(|x| x.is_alphanumeric() || x == '-' || x == '_')
+    {
+        return Err(ResponseError::from_msg(
+            format!(
+                "Invalid `targetIndexUid` provided: '{}'. Index UID can only be composed of alphanumeric characters, hyphens (-), and underscores (_).",
+                target_index_uid
+            ),
+            Code::InvalidIndexUid,
+        ));
+    }
     
     // [meilisearchfj] Removed println! statement
     // Security Check for Snapshot Path
@@ -139,7 +154,7 @@ pub async fn fj_import_index_snapshot(
     }
 
     let task_kind = KindWithContent::SingleIndexSnapshotImport {
-        source_snapshot_path: canonical_source_path.to_string_lossy().into_owned(),
+        source_snapshot_path: source_snapshot_full_path.to_string_lossy().into_owned(),
         target_index_uid,
     };
 
