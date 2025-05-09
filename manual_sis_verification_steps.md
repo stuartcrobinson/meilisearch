@@ -24,7 +24,7 @@ Open a terminal window (Terminal 1) and start your Meilisearch instance, pointin
 If you built Meilisearch in debug mode (e.g., using `cargo build`), the binary is typically located at `target/debug/meilisearch`.
 If you built in release mode (e.g., `cargo build --release`), it's at `target/release/meilisearch`.
 
-Replace the command below with the correct path to your binary.
+The following command assumes you have a debug build. If you used a release build (`cargo build --release`), change `debug` to `release` in the path.
 
 ```bash
 ./target/debug/meilisearch --snapshot-dir ./ms_snapshots --db-path ./ms_data
