@@ -102,11 +102,11 @@ Wait for the snapshot creation task to complete. Replace `TASK_UID_HERE` with th
 ```bash
 curl 'http://localhost:7700/tasks/TASK_UID_HERE' | jq
 ```
-Once the status is `succeeded`, look at the `details` field. It should contain a `dumpUid` (e.g., `movies_source-YYYYMMDD-HHMMSS.snapshot.tar.gz` or similar, the exact format might vary based on implementation, but it will be `INDEX_UID-SNAPSHOT_UID.snapshot.tar.gz`).
+Once the status is `succeeded`, look at the `details` field. It should contain a `dumpUid` (this is the unique snapshot identifier, e.g., `YYYYMMDD-HHMMSS` or a similar unique string).
 The `dumpUid` in the task details is actually just the unique part of the filename (the `SNAPSHOT_UID`).
-The full filename will be `movies_source-SNAPSHOT_UID.snapshot.tar.gz`.
+The full filename will be constructed as `INDEX_UID-SNAPSHOT_UID.snapshot.tar.gz`. For our example, it would be `movies_source-YOUR_SNAPSHOT_UID.snapshot.tar.gz` where `YOUR_SNAPSHOT_UID` is the value from `dumpUid`.
 
-Verify this file exists in your `./ms_snapshots` directory. For example, if the `dumpUid` (snapshot UID) is `20250508-123456`, the file will be `movies_source-20250508-123456.snapshot.tar.gz`.
+Verify this file exists in your `./ms_snapshots` directory. For example, if the `index_uid` is `movies_source` and the `dumpUid` (snapshot UID) from the task details is `20250508-123456`, the file will be `movies_source-20250508-123456.snapshot.tar.gz`.
 
 Let's assume the snapshot filename generated is `movies_source-YOUR_SNAPSHOT_UID.snapshot.tar.gz`. **You will need this exact filename for the next step.**
 
