@@ -24,3 +24,4 @@ crates/milli/fuzz/update::facet::incremental::fuzz::fuzz/
 
 #stuart
 /ms_snapshots
+/ms_data
