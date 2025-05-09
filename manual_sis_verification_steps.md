@@ -20,10 +20,20 @@ mkdir ./ms_snapshots
 
 ### 2. Start Meilisearch
 
-Open a terminal window (Terminal 1) and start your Meilisearch instance, pointing it to the snapshot directory you just created. Replace `./your_meilisearch_binary` with the actual path to your binary.
+Open a terminal window (Terminal 1) and start your Meilisearch instance, pointing it to the snapshot directory you just created.
+If you built Meilisearch in debug mode (e.g., using `cargo build`), the binary is typically located at `target/debug/meilisearch`.
+If you built in release mode (e.g., `cargo build --release`), it's at `target/release/meilisearch`.
+
+Replace the command below with the correct path to your binary.
 
 ```bash
-./your_meilisearch_binary --snapshot-dir ./ms_snapshots --db-path ./ms_data
+./target/debug/meilisearch --snapshot-dir ./ms_snapshots --db-path ./ms_data
+```
+
+Alternatively, you can use `cargo run` which will compile and run the binary. If you use `cargo run`, you need to pass arguments after `--`:
+```bash
+# Example using cargo run (from the root of the meilisearch project)
+# cargo run -- --snapshot-dir ./ms_snapshots --db-path ./ms_data
 ```
 
 Keep this terminal window open. Meilisearch will log its activity here. By default, it will run on `http://localhost:7700`. We are not setting a master key for simplicity in these manual steps.
