@@ -89,7 +89,7 @@ This section outlines the various components, features, technologies, and servic
           2.  **Secure Transfer:** The `.snapshot` file is securely transferred from the source `SearchNodeVM` to a target `SearchNodeVM`.
               *   Methods: `scp` or `rsync` over SSH (simpler start). For very large files or more robust transfers, use an intermediary object storage (e.g., S3 presigned URL upload from source, download to target).
           3.  **Import Snapshot:** Orchestrator calls the SIS import API on the target Meilisearch instance, providing the path to the transferred snapshot file. This creates/replaces the index on the target instance.
-          4.  **Update GMD:** Orchestrator updates the Global Master Database with the new physical location (target `SearchNodeVM` ID) of the `LogicalIndexName`.
+          4.  **Update GMD:** Orchestrator updates the `PhysicalInstances` record for the `LogicalIndexName` in the Global Master Database, specifically by updating its `deployed_engine_id` to point to the new target `DeployedEngine` where the index now resides.
           5.  **Signal FRRs (via FRR Data Sync):** Orchestrator signals FRRs to update their routing cache (e.g., by ensuring GMD change triggers Supabase Realtime event).
 
 **III. Orchestration & Management Layer (Initially Manual/Scripted, then Automated)**
@@ -133,7 +133,7 @@ This section outlines the various components, features, technologies, and servic
           *   **`SearchNodeVMs`** (Describes the Virtual Machine itself)
               *   `id` (UUID PK DEFAULT gen_random_uuid())
               *   `ip_address` (INET) - Internal IP address.
-              *   `hostname` (TEXT UNIQUE) - Optional, but useful for identification.
+              *   `hostname` (TEXT, NULLABLE) - Optional: A human-readable name. Operationally, hostnames should be treated as unique for clarity in logging/monitoring, but this is not strictly DB-enforced to allow flexibility if provisioning already ensures it or uses cloud-generated names.
               *   `region` (TEXT)
               *   `capacity_metrics_json` (JSONB) - e.g., CPU, RAM, disk specs.
               *   `status` (TEXT) - e.g., 'active', 'maintenance', 'provisioning', 'decommissioned'.
@@ -145,7 +145,7 @@ This section outlines the various components, features, technologies, and servic
               *   `engine_version` (TEXT NOT NULL)
               *   `port` (INTEGER NOT NULL) - Port this engine instance is listening on.
               *   `status` (TEXT) - e.g., 'running', 'stopped', 'error', 'deploying', 'unhealthy'.
-              *   `config_details_json` (JSONB) - Optional, for engine-specific configurations managed by Flapjack.
+              *   `config_details_json` (JSONB) - Optional: For engine-specific configurations managed by Flapjack that aren't covered by dedicated columns (e.g., specific runtime flags, plugin settings, or minor tuning parameters).
               *   UNIQUE (`search_node_vm_id`, `port`)
               *   UNIQUE (`search_node_vm_id`, `engine_type`) - Assuming one instance of a given engine type per VM.
 
