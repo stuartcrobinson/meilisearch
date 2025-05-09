@@ -165,6 +165,12 @@ You should see "Interstellar" in the results.
 
 You have now successfully created a snapshot of a single index and imported it as a new index with a different name!
 
+
+## List all the indexes
+```
+curl -X GET 'http://localhost:7700/indexes' | jq
+```
+
 ## Cleanup (Optional)
 
 1.  Stop Meilisearch by pressing `Ctrl+C` in Terminal 1.
@@ -173,4 +179,371 @@ You have now successfully created a snapshot of a single index and imported it a
     rm -rf ./ms_data
     rm -rf ./ms_snapshots
     ```
+
+# this works perfectly. amazing
+
+```
+stuart@Stuarts-MacBook-Pro ~> curl -X POST 'http://localhost:7700/indexes' \
+                                    -H 'Content-Type: application/json' \
+                                    --data-binary '{
+                                  "uid": "movies_source",
+                                  "primaryKey": "id"
+                                }' | jq
+  % Total    % Received % Xferd  Average Speed   Time    Time     Time  Current
+                                 Dload  Upload   Total   Spent    Left  Speed
+100   182  100   126  100    56   4181   1858 --:--:-- --:--:-- --:--:--  7583
+{
+  "taskUid": 0,
+  "indexUid": "movies_source",
+  "status": "enqueued",
+  "type": "indexCreation",
+  "enqueuedAt": "2025-05-09T02:58:44.473557Z"
+}
+stuart@Stuarts-MacBook-Pro ~> curl 'http://localhost:7700/tasks/0' | jq
+  % Total    % Received % Xferd  Average Speed   Time    Time     Time  Current
+                                 Dload  Upload   Total   Spent    Left  Speed
+100   306  100   306    0     0  38064      0 --:--:-- --:--:-- --:--:--  149k
+{
+  "uid": 0,
+  "batchUid": 0,
+  "indexUid": "movies_source",
+  "status": "succeeded",
+  "type": "indexCreation",
+  "canceledBy": null,
+  "details": {
+    "primaryKey": "id"
+  },
+  "error": null,
+  "duration": "PT0.104722S",
+  "enqueuedAt": "2025-05-09T02:58:44.473557Z",
+  "startedAt": "2025-05-09T02:58:44.49509Z",
+  "finishedAt": "2025-05-09T02:58:44.599812Z"
+}
+stuart@Stuarts-MacBook-Pro ~>
+stuart@Stuarts-MacBook-Pro ~> curl -X POST 'http://localhost:7700/indexes/movies_source/documents' \
+                                    -H 'Content-Type: application/json' \
+                                    --data-binary '[
+                                  { "id": 1, "title": "Mad Max: Fury Road", "genre": "Action" },
+                                  { "id": 2, "title": "Interstellar", "genre": "Sci-Fi" },
+                                  { "id": 3, "title": "The Lord of the Rings", "genre": "Fantasy" }
+                                ]' | jq
+  % Total    % Received % Xferd  Average Speed   Time    Time     Time  Current
+                                 Dload  Upload   Total   Spent    Left  Speed
+100   340  100   137  100   203   4569   6771 --:--:-- --:--:-- --:--:-- 14166
+{
+  "taskUid": 1,
+  "indexUid": "movies_source",
+  "status": "enqueued",
+  "type": "documentAdditionOrUpdate",
+  "enqueuedAt": "2025-05-09T02:59:45.409953Z"
+}
+stuart@Stuarts-MacBook-Pro ~> curl 'http://localhost:7700/tasks/1' | jq
+  % Total    % Received % Xferd  Average Speed   Time    Time     Time  Current
+                                 Dload  Upload   Total   Spent    Left  Speed
+100   343  100   343    0     0  42576      0 --:--:-- --:--:-- --:--:--  167k
+{
+  "uid": 1,
+  "batchUid": 1,
+  "indexUid": "movies_source",
+  "status": "succeeded",
+  "type": "documentAdditionOrUpdate",
+  "canceledBy": null,
+  "details": {
+    "receivedDocuments": 3,
+    "indexedDocuments": 3
+  },
+  "error": null,
+  "duration": "PT0.785620S",
+  "enqueuedAt": "2025-05-09T02:59:45.409953Z",
+  "startedAt": "2025-05-09T02:59:45.430745Z",
+  "finishedAt": "2025-05-09T02:59:46.216365Z"
+}
+stuart@Stuarts-MacBook-Pro ~> curl -X POST 'http://localhost:7700/indexes/movies_source/search' \
+                                    -H 'Content-Type: application/json' \
+                                    --data-binary '{
+                                  "q": "Mad Max"
+                                }' | jq
+  % Total    % Received % Xferd  Average Speed   Time    Time     Time  Current
+                                 Dload  Upload   Total   Spent    Left  Speed
+100   173  100   149  100    24  15464   2490 --:--:-- --:--:-- --:--:-- 57666
+{
+  "hits": [
+    {
+      "id": 1,
+      "title": "Mad Max: Fury Road",
+      "genre": "Action"
+    }
+  ],
+  "query": "Mad Max",
+  "processingTimeMs": 1,
+  "limit": 20,
+  "offset": 0,
+  "estimatedTotalHits": 1
+}
+stuart@Stuarts-MacBook-Pro ~>
+stuart@Stuarts-MacBook-Pro ~>
+stuart@Stuarts-MacBook-Pro ~> curl -X POST "http://localhost:7700/indexes/movies_source/snapshots" \
+                                    -H 'Content-Type: application/json' \
+                                    --data-binary '{}' | jq
+  % Total    % Received % Xferd  Average Speed   Time    Time     Time  Current
+                                 Dload  Upload   Total   Spent    Left  Speed
+100   142  100   140  100     2   5009     71 --:--:-- --:--:-- --:--:--  6454
+{
+  "taskUid": 2,
+  "indexUid": "movies_source",
+  "status": "enqueued",
+  "type": "singleIndexSnapshotCreation",
+  "enqueuedAt": "2025-05-09T03:00:33.658405Z"
+}
+stuart@Stuarts-MacBook-Pro ~> curl 'http://localhost:7700/tasks/2' | jq
+  % Total    % Received % Xferd  Average Speed   Time    Time     Time  Current
+                                 Dload  Upload   Total   Spent    Left  Speed
+100   351  100   351    0     0  48280      0 --:--:-- --:--:-- --:--:--  342k
+{
+  "uid": 2,
+  "batchUid": 2,
+  "indexUid": "movies_source",
+  "status": "succeeded",
+  "type": "singleIndexSnapshotCreation",
+  "canceledBy": null,
+  "details": {
+    "dumpUid": "fe081318-9c75-4b2f-b140-c975404c4613"
+  },
+  "error": null,
+  "duration": "PT0.050054S",
+  "enqueuedAt": "2025-05-09T03:00:33.658405Z",
+  "startedAt": "2025-05-09T03:00:33.67837Z",
+  "finishedAt": "2025-05-09T03:00:33.728424Z"
+}
+stuart@Stuarts-MacBook-Pro ~> curl -X POST "http://localhost:7700/indexes/movies_source/snapshots" \
+                                    -H 'Content-Type: application/json' \
+                                    --data-binary '{}' | jq
+  % Total    % Received % Xferd  Average Speed   Time    Time     Time  Current
+                                 Dload  Upload   Total   Spent    Left  Speed
+100   142  100   140  100     2   4583     65 --:--:-- --:--:-- --:--:--  5680
+{
+  "taskUid": 3,
+  "indexUid": "movies_source",
+  "status": "enqueued",
+  "type": "singleIndexSnapshotCreation",
+  "enqueuedAt": "2025-05-09T03:01:09.912614Z"
+}
+stuart@Stuarts-MacBook-Pro ~> curl 'http://localhost:7700/tasks/3' | jq
+  % Total    % Received % Xferd  Average Speed   Time    Time     Time  Current
+                                 Dload  Upload   Total   Spent    Left  Speed
+100   351  100   351    0     0  47032      0 --:--:-- --:--:-- --:--:--  342k
+{
+  "uid": 3,
+  "batchUid": 3,
+  "indexUid": "movies_source",
+  "status": "succeeded",
+  "type": "singleIndexSnapshotCreation",
+  "canceledBy": null,
+  "details": {
+    "dumpUid": "9dbafa26-bb2d-42c6-9565-52a7b5ef65ad"
+  },
+  "error": null,
+  "duration": "PT0.048758S",
+  "enqueuedAt": "2025-05-09T03:01:09.912614Z",
+  "startedAt": "2025-05-09T03:01:09.93542Z",
+  "finishedAt": "2025-05-09T03:01:09.984178Z"
+}
+stuart@Stuarts-MacBook-Pro ~>
+stuart@Stuarts-MacBook-Pro ~>
+stuart@Stuarts-MacBook-Pro ~> curl -X POST 'http://localhost:7700/snapshots/import' \
+                                    -H 'Content-Type: application/json' \
+                                    --data-binary '{
+                                  "sourceSnapshotFilename": "movies_source-9dbafa26-bb2d-42c6-9565-52a7b5ef65ad.snapshot.tar.gz",
+                                  "targetIndexUid": "movies_target!"
+                                }' | jq
+  % Total    % Received % Xferd  Average Speed   Time    Time     Time  Current
+                                 Dload  Upload   Total   Spent    Left  Speed
+100   418  100   274  100   144  36635  19253 --:--:-- --:--:-- --:--:--  408k
+{
+  "message": "Invalid `targetIndexUid` provided: 'movies_target!'. Index UID can only be composed of alphanumeric characters, hyphens (-), and underscores (_).",
+  "code": "invalid_index_uid",
+  "type": "invalid_request",
+  "link": "https://docs.meilisearch.com/errors#invalid_index_uid"
+}
+stuart@Stuarts-MacBook-Pro ~> curl -X POST 'http://localhost:7700/snapshots/import' \
+                                    -H 'Content-Type: application/json' \
+                                    --data-binary '{
+                                  "sourceSnapshotFilename": "movies_source-9dbafa26-bb2d-42c6-9565-52a7b5ef65ad.snapshot.tar.gz",
+                                  "targetIndexUid": "movies_targetttt"
+                                }' | jq
+  % Total    % Received % Xferd  Average Speed   Time    Time     Time  Current
+                                 Dload  Upload   Total   Spent    Left  Speed
+100   287  100   141  100   146   5107   5288 --:--:-- --:--:-- --:--:-- 13045
+{
+  "taskUid": 4,
+  "indexUid": "movies_targetttt",
+  "status": "enqueued",
+  "type": "singleIndexSnapshotImport",
+  "enqueuedAt": "2025-05-09T03:03:26.528171Z"
+}
+stuart@Stuarts-MacBook-Pro ~> curl 'http://localhost:7700/tasks/4' | jq
+  % Total    % Received % Xferd  Average Speed   Time    Time     Time  Current
+                                 Dload  Upload   Total   Spent    Left  Speed
+100   407  100   407    0     0  49381      0 --:--:-- --:--:-- --:--:--  198k
+{
+  "uid": 4,
+  "batchUid": 4,
+  "indexUid": "movies_targetttt",
+  "status": "succeeded",
+  "type": "singleIndexSnapshotImport",
+  "canceledBy": null,
+  "details": {
+    "originalFilter": "Importing snapshot 9dbafa26-bb2d-42c6-9565-52a7b5ef65ad into index movies_targetttt"
+  },
+  "error": null,
+  "duration": "PT0.050276S",
+  "enqueuedAt": "2025-05-09T03:03:26.528171Z",
+  "startedAt": "2025-05-09T03:03:26.548948Z",
+  "finishedAt": "2025-05-09T03:03:26.599224Z"
+}
+stuart@Stuarts-MacBook-Pro ~> curl -X POST 'http://localhost:7700/snapshots/import' \
+                                    -H 'Content-Type: application/json' \
+                                    --data-binary '{
+                                  "sourceSnapshotFilename": "movies_source-9dbafa26-bb2d-42c6-9565-52a7b5ef65ad.snapshot.tar.gz",
+                                  "targetIndexUid": "movies_target"
+                                }' | jq
+  % Total    % Received % Xferd  Average Speed   Time    Time     Time  Current
+                                 Dload  Upload   Total   Spent    Left  Speed
+100   281  100   138  100   143   4662   4830 --:--:-- --:--:-- --:--:-- 12217
+{
+  "taskUid": 5,
+  "indexUid": "movies_target",
+  "status": "enqueued",
+  "type": "singleIndexSnapshotImport",
+  "enqueuedAt": "2025-05-09T03:04:23.190839Z"
+}
+stuart@Stuarts-MacBook-Pro ~> curl 'http://localhost:7700/tasks/5' | jq
+  % Total    % Received % Xferd  Average Speed   Time    Time     Time  Current
+                                 Dload  Upload   Total   Spent    Left  Speed
+100   401  100   401    0     0  54505      0 --:--:-- --:--:-- --:--:--  391k
+{
+  "uid": 5,
+  "batchUid": 5,
+  "indexUid": "movies_target",
+  "status": "succeeded",
+  "type": "singleIndexSnapshotImport",
+  "canceledBy": null,
+  "details": {
+    "originalFilter": "Importing snapshot 9dbafa26-bb2d-42c6-9565-52a7b5ef65ad into index movies_target"
+  },
+  "error": null,
+  "duration": "PT0.050044S",
+  "enqueuedAt": "2025-05-09T03:04:23.190839Z",
+  "startedAt": "2025-05-09T03:04:23.212312Z",
+  "finishedAt": "2025-05-09T03:04:23.262356Z"
+}
+stuart@Stuarts-MacBook-Pro ~> curl 'http://localhost:7700/indexes/movies_target' | jq
+
+  % Total    % Received % Xferd  Average Speed   Time    Time     Time  Current
+                                 Dload  Upload   Total   Spent    Left  Speed
+100   125  100   125    0     0  17556      0 --:--:-- --:--:-- --:--:--  122k
+{
+  "uid": "movies_target",
+  "createdAt": "2025-05-09T02:58:44.496479Z",
+  "updatedAt": "2025-05-09T03:04:23.239338Z",
+  "primaryKey": "id"
+}
+stuart@Stuarts-MacBook-Pro ~> curl -X POST 'http://localhost:7700/indexes/movies_target/search' \
+                                    -H 'Content-Type: application/json' \
+                                    --data-binary '{
+                                  "q": "Interstellar"
+                                }' | jq
+  % Total    % Received % Xferd  Average Speed   Time    Time     Time  Current
+                                 Dload  Upload   Total   Spent    Left  Speed
+100   177  100   148  100    29   9108   1784 --:--:-- --:--:-- --:--:-- 17700
+{
+  "hits": [
+    {
+      "id": 2,
+      "title": "Interstellar",
+      "genre": "Sci-Fi"
+    }
+  ],
+  "query": "Interstellar",
+  "processingTimeMs": 8,
+  "limit": 20,
+  "offset": 0,
+  "estimatedTotalHits": 1
+}
+stuart@Stuarts-MacBook-Pro ~> curl -X POST 'http://localhost:7700/indexes/movies_target/search' \
+                                    -H 'Content-Type: application/json' \
+                                    --data-binary '{
+                                  "q": "Inte"
+                                }' | jq
+  % Total    % Received % Xferd  Average Speed   Time    Time     Time  Current
+                                 Dload  Upload   Total   Spent    Left  Speed
+100   161  100   140  100    21  15141   2271 --:--:-- --:--:-- --:--:-- 53666
+{
+  "hits": [
+    {
+      "id": 2,
+      "title": "Interstellar",
+      "genre": "Sci-Fi"
+    }
+  ],
+  "query": "Inte",
+  "processingTimeMs": 0,
+  "limit": 20,
+  "offset": 0,
+  "estimatedTotalHits": 1
+}
+stuart@Stuarts-MacBook-Pro ~> curl -X POST 'http://localhost:7700/indexes/movies_target/search' \
+                                    -H 'Content-Type: application/json' \
+                                    --data-binary '{
+                                  "q": "Intre"
+                                }' | jq
+  % Total    % Received % Xferd  Average Speed   Time    Time     Time  Current
+                                 Dload  Upload   Total   Spent    Left  Speed
+100   163  100   141  100    22  15670   2444 --:--:-- --:--:-- --:--:-- 54333
+{
+  "hits": [
+    {
+      "id": 2,
+      "title": "Interstellar",
+      "genre": "Sci-Fi"
+    }
+  ],
+  "query": "Intre",
+  "processingTimeMs": 1,
+  "limit": 20,
+  "offset": 0,
+  "estimatedTotalHits": 1
+}
+stuart@Stuarts-MacBook-Pro ~> curl -X GET 'http://localhost:7700/indexes'
+{"results":[{"uid":"movies_source","createdAt":"2025-05-09T02:58:44.496479Z","updatedAt":"2025-05-09T02:59:46.083495Z","primaryKey":"id"},{"uid":"movies_target","createdAt":"2025-05-09T02:58:44.496479Z","updatedAt":"2025-05-09T02:59:46.083495Z","primaryKey":"id"},{"uid":"movies_targetttt","createdAt":"2025-05-09T02:58:44.496479Z","updatedAt":"2025-05-09T02:59:46.083495Z","primaryKey":"id"}],"offset":0,"limit":20,"total":3}⏎
+stuart@Stuarts-MacBook-Pro ~> curl -X GET 'http://localhost:7700/indexes' | jq
+  % Total    % Received % Xferd  Average Speed   Time    Time     Time  Current
+                                 Dload  Upload   Total   Spent    Left  Speed
+100   426  100   426    0     0  55708      0 --:--:-- --:--:-- --:--:--  416k
+{
+  "results": [
+    {
+      "uid": "movies_source",
+      "createdAt": "2025-05-09T02:58:44.496479Z",
+      "updatedAt": "2025-05-09T02:59:46.083495Z",
+      "primaryKey": "id"
+    },
+    {
+      "uid": "movies_target",
+      "createdAt": "2025-05-09T02:58:44.496479Z",
+      "updatedAt": "2025-05-09T02:59:46.083495Z",
+      "primaryKey": "id"
+    },
+    {
+      "uid": "movies_targetttt",
+      "createdAt": "2025-05-09T02:58:44.496479Z",
+      "updatedAt": "2025-05-09T02:59:46.083495Z",
+      "primaryKey": "id"
+    }
+  ],
+  "offset": 0,
+  "limit": 20,
+  "total": 3
+}
+stuart@Stuarts-MacBook-Pro ~>
 ```
