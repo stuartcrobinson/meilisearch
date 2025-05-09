@@ -1,5 +1,3 @@
-Okay, this is a great set of information! Let's consolidate it into a single, well-structured document describing Flapjack Search.
-
 ## Flapjack Search: Managed Search Service
 
 **Brief Summary:**
