@@ -4,7 +4,7 @@ Okay, this is a great set of information! Let's consolidate it into a single, we
 
 **Brief Summary:**
 
-Flapjack Search is a managed web service designed to simplify the deployment, scaling, and operation of search engines like Meilisearch (and potentially Typesense in the future) for application developers. It provides users with geo-distributed search instances, abstracting away the complexities of server infrastructure management and search engine operations. A core technical differentiator is its custom-forked Meilisearch engine supporting Single Index Snapshots (SIS), enabling efficient, fine-grained index mobility for horizontal scaling and resource optimization, all transparently managed via the Flapjack Request Router (FRR) API gateway. Users can also define Index Groups, collections of Logical Indexes guaranteed to be co-located on the same physical search engine instance, primarily for multi-index search capabilities.
+Flapjack Search is a managed web service designed to simplify the deployment, scaling, and operation of search engines like Meilisearch (and potentially Typesense in the future) for application developers. It provides users with geo-distributed search instances, abstracting away the complexities of server infrastructure management and search engine operations. A core technical differentiator is its custom-forked Meilisearch engine supporting Single Index Snapshots (SIS), enabling efficient, fine-grained index mobility for horizontal scaling and resource optimization, all transparently managed via the Flapjack Request Router (FRR) API gateway, accessed via geo-optimised DNS endpoints. Users can also define Index Groups, collections of Logical Indexes guaranteed to be co-located on the same physical search engine instance, primarily for multi-index search capabilities.
 
 ---
 
@@ -12,15 +12,15 @@ Flapjack Search is a managed web service designed to simplify the deployment, sc
 
 Flapjack Search aims to deliver a "search-as-a-service" platform, initially focusing on Meilisearch. The architecture is designed to provide developers with the power of Meilisearch without the operational overhead, offering scalability, multi-tenancy, and ease of management.
 
-At the heart of the customer interaction is the **Flapjack Request Router (FRR)**. This globally distributed API gateway, running on dedicated **FRRNodeVMs**, serves as the sole entry point for all customer search requests. The FRR's primary responsibilities include HTTPS termination, robust stateless API key authentication (e.g., JWTs or opaque tokens validated against the Global Master Database), and fine-grained authorization. It maps an API key to a specific customer and ensures that requests are only permitted for `LogicalIndexName`(s) the customer owns, enforcing permissions (stored as `permissions_json` in the GMD) like read-only or read-write access. A crucial function of the FRR is dynamic routing: each FRR instance maintains its own high-speed in-memory cache (e.g., a Go map with `sync.RWMutex`) of routing information. This cache is kept updated from the Global Master Database via **FRR Data Sync** (primarily Supabase Realtime subscriptions). This routing information allows the FRR to map a customer's `LogicalIndexName` (e.g., `my_products`) to the correct backend search engine. It does this by finding the `PhysicalInstance` which points to a `DeployedEngine` (giving `port`, `engine_type`, and `engine_version`) which in turn points to a `SearchNodeVM` (giving `ip_address`). The FRR also gets the `PhysicalIndexName` (e.g., `customerID_my_products`) from the `PhysicalInstance`. The FRR transparently rewrites incoming request paths (e.g., `/v1/indexes/my_products/search`) to the internal physical path before proxying the request to the correct backend search engine instance. This ensures that users interact with Flapjack as if they are interacting directly with a standard Meilisearch API, with the FRR handling the multi-tenancy and routing invisibly.
+At the heart of the customer interaction is the **Flapjack Request Router (FRR)**. This globally distributed API gateway, running on dedicated **FRRNodeVMs** and made accessible to users via geo-based DNS routing (e.g., AWS Route 53 Geolocation or Latency-based routing policies), serves as the sole entry point for all customer search requests. The FRR's primary responsibilities include HTTPS termination, robust stateless API key authentication (e.g., JWTs or opaque tokens validated against the Global Master Database), and fine-grained authorization. It maps an API key to a specific customer and ensures that requests are only permitted for `LogicalIndexName`(s) the customer owns, enforcing permissions (stored as `permissions_json` in the GMD) like read-only or read-write access. A crucial function of the FRR is dynamic routing: each FRR instance maintains its own high-speed in-memory cache (e.g., a Go map with `sync.RWMutex`) of routing information. This cache is kept updated from the Global Master Database via **FRR Data Sync** (primarily Supabase Realtime subscriptions). This routing information allows the FRR to map a customer's `LogicalIndexName` (e.g., `my_products`) to the correct backend search engine. It does this by finding the `PhysicalInstance` which points to a `DeployedEngine` (giving `port`, `engine_type`, and `engine_version`) which in turn points to a `SearchNodeVM` (giving `ip_address`). The FRR also gets the `PhysicalIndexName` (e.g., `customerID_my_products`) from the `PhysicalInstance`. The FRR transparently rewrites incoming request paths (e.g., `/v1/indexes/my_products/search`) to the internal physical path before proxying the request to the correct backend search engine instance. This ensures that users interact with Flapjack as if they are interacting directly with a standard Meilisearch API, with the FRR handling the multi-tenancy and routing invisibly.
 
-The **Core Service Layer** consists of multiple search engine instances (initially Meilisearch), each running on a dedicated **SearchNodeVM**. A key innovation is the use of a custom-forked Meilisearch that implements **Single Index Snapshot (SIS)** functionality. This custom API allows Flapjack to create a standard Meilisearch `.snapshot` file of an individual index, transfer it, and import it onto a different `SearchNodeVM`. This SIS process is fundamental for efficiently moving specific customer indexes between physical servers. This enables dynamic scaling (moving a hot index to a more powerful `SearchNodeVM`), resource optimization (co-locating smaller indexes), and seamless maintenance. Tenancy within a single search engine instance is achieved by prefixing index names with the customer's ID to form the `PhysicalIndexName`.
+The **Core Service Layer** consists of multiple search engine instances (initially Meilisearch), each running on a dedicated **SearchNodeVM**. A key innovation is the use of a custom-forked Meilisearch that implements **Single Index Snapshot (SIS)** functionality. This custom API allows Flapjack to create a standard Meilisearch `.snapshot` file of an individual index, transfer it, and import it onto a target `DeployedEngine` (which resides on a `SearchNodeVM`). This SIS process is fundamental for efficiently moving specific customer indexes between physical servers. This enables dynamic scaling (moving a hot index to a more powerful `SearchNodeVM`), resource optimization (co-locating smaller indexes), and seamless maintenance. Tenancy within a single search engine instance is achieved by prefixing index names with the customer's ID to form the `PhysicalIndexName`.
 
 Orchestrating the entire system is the **Orchestration & Management Layer**. Central to this is the **Global Master Database (GMD)**, which will be **Supabase (PostgreSQL)**. The GMD is the single source of truth for all metadata. This includes customer details, API keys and their permissions (`permissions_json`), `LogicalIndexName` definitions, and `Index Group` definitions. It also tracks `SearchNodeVMs` (the virtual machines), `DeployedEngines` (specific search engine instances like Meilisearch or Typesense running on a `SearchNodeVM`, including their `engine_type`, `version`, and `port`), and `PhysicalInstances` (which map a `LogicalIndexName` to a `DeployedEngine` and a `PhysicalIndexName` on that engine). The GMD also stores status and capacity metrics for `SearchNodeVMs` and `FRRNodeVMs`. The FRRs keep their routing caches updated from the GMD via FRR Data Sync. An **Orchestrator Service** (initially scripted, later a robust automated service) manages the lifecycle of `SearchNodeVMs` and `DeployedEngines`, and executes the SIS-based index migration workflows. This includes provisioning new `SearchNodeVMs`, deploying search engines (creating `DeployedEngines` records), triggering snapshots, managing secure file transfers of snapshots, initiating imports on target `DeployedEngines`, and then updating the GMD, which in turn signals FRRs to refresh their caches via FRR Data Sync.
 
 The **Infrastructure Layer** will utilize cloud VMs (EC2, Hetzner, etc.) for distinct `FRRNodeVMs` and `SearchNodeVMs`, with plans for bare metal for `SearchNodeVMs`. It includes public static IPs for regional FRR clusters, internal networking, DNS management, and storage for search engine data and temporary snapshot transfers (e.g., S3).
 
-Future enhancements (Phase 2) include a **Customer Control Plane** (web dashboard and API) for self-service management of `LogicalIndex`(es) and `Index Group`(s), full automation of the Orchestrator, comprehensive monitoring and alerting, and advanced security hardening. Phase 3 plans for the expansion to support other search engines like Typesense, applying similar architectural principles and leveraging the `engine_type` field in the `SearchNodeVMs` table. The FRR is designed to be high-performance, with Go being a preferred language, but will rely on external services like Cloudflare or AWS Shield for DDoS mitigation rather than attempting to build this capability internally.
+Future enhancements (Phase 2) include a **Customer Control Plane** (web dashboard and API) for self-service management of `LogicalIndex`(es) and `Index Group`(s), full automation of the Orchestrator, comprehensive monitoring and alerting, and advanced security hardening. Phase 3 plans for the expansion to support other search engines like Typesense, applying similar architectural principles and leveraging the `engine_type` field in the `DeployedEngines` table. The FRR is designed to be high-performance, with Go being a preferred language, but will rely on external services like Cloudflare or AWS Shield for DDoS mitigation rather than attempting to build this capability internally.
 
 ---
 
@@ -49,7 +49,7 @@ This section outlines the various components, features, technologies, and servic
                   2.  Using `CustomerID` and `LogicalIndexName` (from URL path), find the `LogicalIndex` record.
                   3.  From the `LogicalIndex` record, find the corresponding `PhysicalInstances` record.
                   4.  From `PhysicalInstances.deployed_engine_id`, look up the `DeployedEngines` record. This provides the `engine_type`, `port`, `engine_version`, and `search_node_vm_id`.
-                  5.  From `DeployedEngines.search_node_vm_id`, look up the `SearchNodeVMs` record to get the `ip_address`.
+                  5.  From `DeployedEngines.search_node_vm_id`, look up the `SearchNodeVMs` record to get the `ip_address` (specifically, the internal IP used for backend communication).
                   6.  The FRR now has: `ip_address`, `port`, `engine_type`, and the `PhysicalIndexName` (from `PhysicalInstances.physical_index_name_on_vm`).
               *   Routing information (derived from GMD tables like `LogicalIndexes`, `PhysicalInstances`, `DeployedEngines`, `SearchNodeVMs`) is sourced from the FRR's local in-memory cache, kept synchronized with the Global Master Database via FRR Data Sync.
           5.  **Request Transformation (Search Engine Specific):**
@@ -59,9 +59,9 @@ This section outlines the various components, features, technologies, and servic
                   *   The `engine_type` from `DeployedEngines` can be used to adjust transformations if other engines (like Typesense) have different API path structures.
               *   **Meilisearch Master Key Handling:** The FRR *will not* inject Meilisearch Master Keys per request. Backend Meilisearch instances will be configured with a shared, internal-only master key managed by Flapjack. The FRR acts as a trusted client forwarding requests.
           6.  **Response Handling:** Forward the Meilisearch response (data, status codes, headers) back to the customer, maintaining the feel of direct Meilisearch interaction. Error responses for auth/authz issues will also mimic Meilisearch error formats where appropriate.
-          7.  **Geo-Routing (Initial Strategy):**
-              *   DNS-based geo-routing directs customers to the nearest regional FRR cluster.
-              *   The FRR within that cluster then routes the request to the customer's chosen primary (or secondary, if applicable) Meilisearch backend VM, which could be in a different region.
+        7.  **Geo-Routing (Initial Strategy):**
+            *   DNS-based geo-routing (e.g., utilizing AWS Route 53 Geolocation or Latency-based routing policies) directs customers to the regional FRR cluster anticipated to provide the lowest latency, typically by routing them to the FRR cluster geographically closest to them.
+            *   The FRR within that accessed regional cluster then routes the request to the customer's designated primary (or secondary, if applicable) backend search engine, which could reside in a different geographical region based on the customer's data residency or performance choices.
       *   **Technology Stack Ideas:**
           *   **Primary Language:** Go (Golang) for high performance, excellent concurrency, and strong networking libraries.
           *   **HTTP Framework (Go):** Standard `net/http`, or lightweight frameworks like Chi, Gin, or Echo.
@@ -78,7 +78,7 @@ This section outlines the various components, features, technologies, and servic
           *   `data.ms` directory (for Meilisearch) or equivalent for other engines.
           *   Dedicated snapshot directory for SIS output.
           *   Master Key (Meilisearch): A single, shared internal master key for all Flapjack-managed Meilisearch instances. This key is *not* customer-facing.
-          *   Listen address/port (e.g., internal IP on port 7700).
+          *   Listen address (from the `SearchNodeVMs.ip_address` of the VM hosting the engine) and port (from the `DeployedEngines.port` specific to this engine instance).
       *   **Tenancy within Instance:** Indexes will be named with a customer prefix to form the `PhysicalIndexName` (e.g., `customerA_products`, `customerB_articles`) to ensure uniqueness within a single search engine instance. The FRR translates the `LogicalIndexName` to this `PhysicalIndexName`.
 
    **B. Single Index Snapshot (SIS) Process (Meilisearch specific):**
@@ -142,7 +142,7 @@ This section outlines the various components, features, technologies, and servic
               *   `id` (UUID PK DEFAULT gen_random_uuid())
               *   `search_node_vm_id` (UUID FK REFERENCES `SearchNodeVMs`(id) ON DELETE CASCADE)
               *   `engine_type` (TEXT NOT NULL) - e.g., 'meilisearch', 'typesense'.
-              *   `engine_version` (TEXT)
+              *   `engine_version` (TEXT NOT NULL)
               *   `port` (INTEGER NOT NULL) - Port this engine instance is listening on.
               *   `status` (TEXT) - e.g., 'running', 'stopped', 'error', 'deploying', 'unhealthy'.
               *   `config_details_json` (JSONB) - Optional, for engine-specific configurations managed by Flapjack.
@@ -162,7 +162,7 @@ This section outlines the various components, features, technologies, and servic
               *   `id` (UUID PK DEFAULT gen_random_uuid())
               *   `public_ip_address` (INET)
               *   `internal_ip_address` (INET)
-              *   `hostname` (TEXT UNIQUE)
+              *   `hostname` (TEXT, NULLABLE) `- Optional: A human-readable name for operators, logging, and monitoring. Operational uniqueness is vital for clarity but not strictly DB-enforced, allowing flexibility if provisioning already ensures it or uses cloud-generated unique names.`
               *   `region` (TEXT)
               *   `version` (TEXT) - FRR software version.
               *   `capacity_metrics_json` (JSONB)
@@ -177,7 +177,7 @@ This section outlines the various components, features, technologies, and servic
       *   **Key Actions (to be automated later):**
           1.  Provisioning a new `SearchNodeVM` or `FRRNodeVM` (via cloud provider API), creating corresponding records in GMD.
           2.  Deploying/configuring search engine services (custom fork for Meilisearch) on a `SearchNodeVM` (creating/updating `DeployedEngines` records), or FRR application on `FRRNodeVM`.
-          3.  Initiating SIS process (trigger snapshot, orchestrate transfer, trigger import) between `DeployedEngines` (which may be on different `SearchNodeVMs`).
+          3.  Initiating SIS process (trigger snapshot on a source `DeployedEngine`, orchestrate snapshot file transfer between source and target `SearchNodeVMs`, trigger import on a target `DeployedEngine`).
           4.  Updating the Global Master Database (e.g., new `deployed_engine_id` for a `PhysicalInstance`, VM/engine statuses, versions in `DeployedEngines`).
           5.  Ensuring GMD changes trigger FRR Data Sync (e.g., via Supabase Realtime).
           6.  Monitoring basic `SearchNodeVM` health, `DeployedEngine` health (e.g., checking Meilisearch `/health` endpoint), and `FRRNodeVM` health.
@@ -191,7 +191,9 @@ This section outlines the various components, features, technologies, and servic
    **B. Networking:**
       *   Public static IPs for FRR clusters (running on `FRRNodeVMs`) per region.
       *   Internal networking (e.g., VPC, private networks) for `FRRNodeVMs` to reach `SearchNodeVMs`, and for `SearchNodeVMs` to communicate for snapshot transfers if not using S3.
-      *   DNS management (for customer-facing FRR endpoints and potentially internal service discovery).
+      *   DNS management:
+               *   **Public DNS:** For customer-facing FRR endpoints (e.g., `search.flapjack.com`), configured with geo-routing policies (e.g., AWS Route 53 Geolocation or Latency-based routing policies) to direct users to the optimal regional FRR cluster.
+               *   **Internal DNS (Optional but Recommended):** For service discovery between internal components (e.g., Orchestrator finding GMD, FRRs resolving internal management endpoints if any).
    **C. Storage:**
       *   `SearchNodeVM` local disk (high-performance SSDs) for search engine data (e.g., Meilisearch `data.ms`).
       *   Temporary storage for snapshot transfers (e.g., an S3 bucket, or local disk space on `SearchNodeVMs` if using direct `scp`/`rsync`).
@@ -263,7 +265,7 @@ This section outlines the various components, features, technologies, and servic
         *   Filesystem-level snapshotting (e.g., LVM snapshots) if Typesense can cleanly recover, though this is less granular.
         *   Potentially contribute to Typesense or develop a custom solution if critical.
 *   **Global DB & Orchestrator Updates:**
-    *   Utilize the `engine_type` field in the `DeployedEngines` table (linked to `SearchNodeVMs`).
+    *   Utilize the `engine_type` field within the `DeployedEngines` table (which is itself linked to `SearchNodeVMs`).
     *   The GMD schema (`DeployedEngines`, `PhysicalInstances`) is already designed to support different `engine_type`s.
     *   Update Orchestrator logic to provision, manage (using `engine_type` from `DeployedEngines`), and (if TCS-equivalent exists) migrate Typesense collections/instances.
 *   **Control Plane Updates:**
