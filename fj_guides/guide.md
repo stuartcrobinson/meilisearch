@@ -130,11 +130,18 @@ This section outlines the various components, features, technologies, and servic
 
           *   **`SearchNodeVMs`** (Describes the Virtual Machine itself)
               *   `id` (UUID PK DEFAULT gen_random_uuid())
-              *   `ip_address` (INET) - Internal IP address.
+              *   `ip_address` (INET) - Internal IP address used for backend service communication.
               *   `hostname` (TEXT, NULLABLE) - Optional: A human-readable name. Operationally, hostnames should be treated as unique for clarity in logging/monitoring, but this is not strictly DB-enforced to allow flexibility if provisioning already ensures it or uses cloud-generated names.
-              *   `region` (TEXT)
-              *   `capacity_metrics_json` (JSONB) - e.g., CPU, RAM, disk specs.
-              *   `status` (TEXT) - e.g., 'active', 'maintenance', 'provisioning', 'decommissioned'.
+              *   `region` (TEXT NOT NULL)
+              *   `architecture` (TEXT) - e.g., 'x86_64', 'arm64'.
+              *   `cpu_cores` (INTEGER) - Number of CPU cores.
+              *   `total_ram_gb` (INTEGER) - Total installed RAM in GB.
+              *   `total_disk_gb` (INTEGER) - Total provisioned disk space in GB.
+              *   `disk_type` (TEXT) - e.g., 'ssd', 'nvme', 'hdd'.
+              *   `cost_per_hour` (DECIMAL, NULLABLE) - Optional: For cost optimization tracking.
+              *   `capacity_metrics_json` (JSONB) - For other static specs or less frequently queried details.
+              *   `current_load_metrics_json` (JSONB, NULLABLE) - Stores recent aggregates/peaks of dynamic operational metrics (e.g., avg CPU/RAM/disk utilization, network IO) collected by the Monitoring System, for quick access by the Orchestrator. Primary time-series data resides in the monitoring system (e.g., Prometheus).
+              *   `status` (TEXT NOT NULL) - e.g., 'active', 'maintenance', 'provisioning', 'decommissioned', 'error'.
 
           *   **`DeployedEngines`** (Links a specific search engine deployment to a `SearchNodeVM`)
               *   `id` (UUID PK DEFAULT gen_random_uuid())
@@ -142,10 +149,12 @@ This section outlines the various components, features, technologies, and servic
               *   `engine_type` (TEXT NOT NULL) - e.g., 'meilisearch', 'typesense'.
               *   `engine_version` (TEXT NOT NULL)
               *   `port` (INTEGER NOT NULL) - Port this engine instance is listening on.
-              *   `status` (TEXT) - e.g., 'running', 'stopped', 'error', 'deploying', 'unhealthy'.
-              *   `config_details_json` (JSONB) - Optional: For engine-specific configurations managed by Flapjack that aren't covered by dedicated columns (e.g., specific runtime flags, plugin settings, or minor tuning parameters).
+              *   `max_ram_allocation_gb` (DECIMAL, NULLABLE) - Configured RAM limit for this specific engine instance, if applicable.
+              *   `config_details_json` (JSONB) - Optional: For engine-specific configurations managed by Flapjack (e.g., runtime flags, plugin settings).
+              *   `current_engine_load_metrics_json` (JSONB, NULLABLE) - Stores recent aggregates/peaks of dynamic operational metrics specific to this engine instance (e.g., its CPU/RAM usage, active connections, query throughput/latency, task queue length) collected by the Monitoring System, for quick access by the Orchestrator.
+              *   `status` (TEXT NOT NULL) - e.g., 'running', 'stopped', 'error', 'deploying', 'unhealthy', 'degraded'.
               *   UNIQUE (`search_node_vm_id`, `port`)
-              *   UNIQUE (`search_node_vm_id`, `engine_type`) - Assuming one instance of a given engine type per VM.
+              *   UNIQUE (`search_node_vm_id`, `engine_type`) - Assuming one instance of a given engine type per VM. (Note: If multiple instances of the same engine type are allowed per VM, this constraint needs adjustment, e.g., by adding a unique deployment name).
 
           *   **`PhysicalInstances`** (Maps a `LogicalIndex` to a `DeployedEngine` where its data resides)
               *   `id` (UUID PK DEFAULT gen_random_uuid())
@@ -153,8 +162,10 @@ This section outlines the various components, features, technologies, and servic
               *   `deployed_engine_id` (UUID FK REFERENCES `DeployedEngines`(id) ON DELETE RESTRICT) - Points to the specific engine instance.
               *   `physical_index_name_on_vm` (TEXT NOT NULL) - Internal, namespaced name on the engine (e.g., `cust123_my_products_index`).
               *   `status` (TEXT) - e.g., 'active', 'migrating', 'standby', 'provisioning', 'failed'.
-              *   `last_known_size_bytes` (BIGINT)
+              *   `last_known_size_bytes` (BIGINT) - Size at last major event (e.g., SIS completion).
+              *   `current_index_size_gb` (DECIMAL, NULLABLE) - More frequently updated size of the index on disk, populated by the Orchestrator/Monitoring from engine stats.
               *   UNIQUE (`deployed_engine_id`, `physical_index_name_on_vm`)
+              *   -- Note: Dynamic operational metrics for each PhysicalInstance (e.g., query counts, specific index latency, ingestion rates) are primarily tracked in the Monitoring System (e.g., Prometheus) and consumed by the Orchestrator.
 
           *   **`FRRNodeVMs`** (Describes the VMs running the Flapjack Request Router)
               *   `id` (UUID PK DEFAULT gen_random_uuid())
@@ -178,7 +189,7 @@ This section outlines the various components, features, technologies, and servic
           3.  Initiating SIS process (trigger snapshot on a source `DeployedEngine`, orchestrate snapshot file transfer between source and target `SearchNodeVMs`, trigger import on a target `DeployedEngine`).
           4.  Updating the Global Master Database (e.g., new `deployed_engine_id` for a `PhysicalInstance`, VM/engine statuses, versions in `DeployedEngines`).
           5.  Ensuring GMD changes trigger FRR Data Sync (e.g., via Supabase Realtime).
-          6.  Monitoring basic `SearchNodeVM` health, `DeployedEngine` health (e.g., checking Meilisearch `/health` endpoint), and `FRRNodeVM` health.
+          6.  Monitoring basic health and collecting key performance/load metrics for SearchNodeVMs (e.g., overall CPU/RAM/disk utilization from current_load_metrics_json) and DeployedEngines (e.g., engine-specific CPU/RAM usage, query throughput/latency from engine endpoints, potentially updating current_engine_load_metrics_json). This data helps inform manual scaling decisions in Phase 1 and populates the GMD with recent operational data for context.
           7.  Decommissioning `DeployedEngines` and `SearchNodeVMs`, ensuring data is migrated or properly handled.
 
 **IV. Infrastructure Layer**
@@ -220,7 +231,11 @@ This section outlines the various components, features, technologies, and servic
       *   Develop the scripts from Phase 1 into a robust, long-running, stateful service (e.g., in Go, Python).
       *   Implement job queues for managing asynchronous tasks like SIS.
       *   **Triggers for Scaling/Index Moves:**
-          *   **Metrics-based:** CPU/memory usage on `SearchNodeVMs`, query latency/volume per index, index data size (thresholds defined in GMD or Orchestrator config).
+          *   **Metrics-based:** Utilizes a rich set of collected metrics, including:
+              *   SearchNodeVM level: Overall CPU, RAM, disk I/O, and network utilization (drawing from current_load_metrics_json in GMD and/or directly from the monitoring system).
+              *   DeployedEngine level: Engine-specific CPU/RAM usage, query throughput, average query latency, task queue lengths, error rates (drawing from current_engine_load_metrics_json in GMD and/or directly from the monitoring system).
+              *   PhysicalInstance (Index) level: Query volume, average latency for the specific index, data ingestion rates, and growth in index data size (drawing from monitoring system and current_index_size_gb in GMD).
+              Thresholds for these metrics, potentially configurable per customer tier or globally, will be defined in the GMD or Orchestrator configuration to trigger scaling actions (like SIS-based migrations).
           *   **Scheduled or manual triggers:** Via Control Plane API or internal admin commands.
       *   **Resource Management:**
           *   Track `SearchNodeVM` and `FRRNodeVM` capacities and utilization.
@@ -234,6 +249,7 @@ This section outlines the various components, features, technologies, and servic
           *   **Search Engine-level (e.g., Meilisearch):** Query stats (count, latency), indexing stats, error rates, task queue length (from engine's `/stats` and `/health` endpoints). Orchestrator periodically polls these and stores aggregated/relevant metrics in GMD or a dedicated time-series DB.
           *   **FRR-level:** Request latency, error rates (4xx, 5xx), throughput, cache hit/miss rates (for its in-memory cache).
           *   **Global DB (Supabase):** Query performance, connection count, replication lag.
+These collected metrics are persisted (e.g., in Prometheus) for historical analysis, dashboarding in Grafana, and alerting. Crucially, they also serve as primary inputs for the Automated Orchestrator Service. The Orchestrator consumes these metrics—either directly from the monitoring system for real-time data or via recent aggregates/peaks stored in GMD fields like current_load_metrics_json, current_engine_load_metrics_json, and current_index_size_gb for quick decision-making—to make intelligent, automated decisions about resource allocation, index placement, and triggering migrations (SIS) to maintain performance SLAs and optimize resource utilization.
       *   **Tools:** Prometheus & Grafana, Datadog, or other managed observability platforms.
       *   **Alerting:** On critical thresholds (`SearchNodeVM` or `FRRNodeVM` down, search engine unresponsive, high error rates from FRR or search engine, full disk, GMD issues, SIS failures). PagerDuty, Slack integrations.
 
